@@ -2987,7 +2987,7 @@ document
 
     // Fetch existing count to generate next Case ID
     try {
-      const res = await fetch("/api/cases", {headers: (window.getAuthHeaders ? window.getAuthHeaders(false) : {})});
+      const res = await fetch("/api/cases");
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.cases)) {
@@ -3210,7 +3210,7 @@ document
 
   // Form Submission
   if (caseForm) {
-    caseForm.addEventListener("submit", async (e) => {
+    caseForm.addEventListener("submit", (e) => {
       e.preventDefault();
 
       const title = caseNameInput?.value.trim() || "";
@@ -3246,77 +3246,78 @@ document
         tags
       };
 
-      // 1. Persist to backend first. The UI must never claim a case is created
-      // before PostgreSQL confirms the insert and returns the real numeric id.
-      let savedCase = null;
-      try {
-        const token = localStorage.getItem("cipher_access_token") || localStorage.getItem("token") || "";
-        const headers = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const response = await fetch("/api/cases", { method: "POST", headers, body: JSON.stringify(payload) });
-        const text = await response.text();
-        let data = {};
-        try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
-        if (!response.ok || !data.case) {
-          throw new Error(data.detail || data.error || `Backend returned HTTP ${response.status}`);
-        }
-        savedCase = data.case;
-      } catch (err) {
-        console.error("CIPHER case creation failed:", err);
-        notifyUser(`Case was NOT created: ${err.message}`);
-        return;
-      }
-
-      // 2. Only after the DB confirms success, synchronize the case state/UI.
-      try {
-        if (window.cipherSetCaseState) window.cipherSetCaseState(savedCase);
-        else if (window.CipherCaseState) {
-          window.CipherCaseState.id = Number(savedCase.id);
-          window.CipherCaseState.caseNumber = savedCase.case_number || "";
-          window.CipherCaseState.title = savedCase.title || "";
-        }
-      } catch (stateErr) { console.warn("Case state sync notice:", stateErr); }
-
+      // 1. Immediately close modal and show the green right-side evidence prompt popup
       caseSequence++;
       closeCaseModal();
       caseForm.reset();
-      showEvidencePromptPopup(savedCase);
-      notifyUser(`Case ${savedCase.case_number} created and synchronized with database.`);
+      showEvidencePromptPopup(payload);
+      notifyUser(`Case ${case_number} created and synchronized with database!`);
 
-      // 3. Update the visual case card with the server-backed record.
+      // 2. Safely update 3D orbit card and focus it
       try {
         if (stage) {
           const targetBox = stage.querySelector(".c1") || stage.querySelector(".floating-case:not(.case-main)") || stage.querySelector(".floating-case");
           if (targetBox) {
-            const priorityValue = savedCase.priority || priority;
-            const isHigh = String(priorityValue).toUpperCase().includes("HIGH") || String(priorityValue).toUpperCase().includes("CRITICAL");
-            const cleanLoc = (savedCase.primary_location || primary_location || "Central").split("(")[0].trim();
-            targetBox.dataset.dbId = String(savedCase.id);
-            targetBox.dataset.caseId = savedCase.case_number || case_number;
-            targetBox.dataset.caseType = savedCase.case_type || case_type;
-            targetBox.dataset.priority = priorityValue;
-            targetBox.dataset.description = savedCase.description || description;
-            targetBox.dataset.incidentDate = savedCase.incident_date || incident_date;
-            targetBox.dataset.location = savedCase.primary_location || primary_location;
-            targetBox.dataset.officer = savedCase.assigned_officer || assigned_officer;
-            targetBox.dataset.jurisdiction = savedCase.jurisdiction || jurisdiction;
-            targetBox.dataset.tags = savedCase.tags || tags;
+            targetBox.dataset.case = title;
+            targetBox.dataset.caseId = case_number;
+            targetBox.dataset.caseType = case_type;
+            targetBox.dataset.priority = priority;
+            targetBox.dataset.description = description;
+            targetBox.dataset.incidentDate = incident_date;
+            targetBox.dataset.location = primary_location;
+            targetBox.dataset.officer = assigned_officer;
+            targetBox.dataset.jurisdiction = jurisdiction;
+            targetBox.dataset.tags = tags;
             targetBox.dataset.isNew = "true";
             targetBox.classList.add("is-new-case");
+
+            const isHigh = priority.toUpperCase().includes("HIGH") || priority.toUpperCase().includes("CRITICAL");
+            const cleanLoc = (primary_location || "Central").split("(")[0].trim();
             targetBox.innerHTML = `
-              <div class="case-top"><span>CASE / ${savedCase.case_number || case_number}</span><div style="display:flex;align-items:center;gap:6px;"><b class="${isHigh ? 'high' : ''}">${String(priorityValue).toUpperCase()}</b><span class="case-new-badge">NEW</span></div></div>
-              <h3>${savedCase.title || title}</h3><p>${savedCase.description || description}</p>
-              <div class="case-stats"><span>${savedCase.case_type || case_type}</span><span>${cleanLoc}</span></div>`;
-            if (typeof window.cipherFocusCase === "function") window.cipherFocusCase(targetBox);
+              <div class="case-top">
+                <span>CASE / ${case_number}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <b class="${isHigh ? 'high' : ''}">${priority.toUpperCase()}</b>
+                  <span class="case-new-badge">NEW</span>
+                </div>
+              </div>
+              <h3>${title}</h3>
+              <p>${description}</p>
+              <div class="case-stats">
+                <span>${case_type}</span>
+                <span>${cleanLoc}</span>
+              </div>
+            `;
+
+            if (typeof window.cipherFocusCase === "function") {
+              window.cipherFocusCase(targetBox);
+            }
+
+            try {
+              targetBox.click();
+            } catch (clickErr) {
+              console.warn("Card click sync notice:", clickErr);
+            }
           }
         }
-      } catch (orbitErr) { console.warn("Orbit visual update notice:", orbitErr); }
+      } catch (orbitErr) {
+        console.warn("Orbit visual update notice:", orbitErr);
+      }
 
-      // 4. Refresh server-backed case data. Evidence can now safely target the
-      // numeric PostgreSQL case id returned by the create endpoint.
+      // 3. Concurrently sync to backend database
       try {
-        if (window.cipherLoadCases) await window.cipherLoadCases();
-      } catch (refreshErr) { console.warn("Case list refresh notice:", refreshErr); }
+        const token = localStorage.getItem("cipher_access_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        fetch("/api/cases", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        }).catch(fetchErr => console.warn("Backend save notice:", fetchErr));
+      } catch (err) {
+        console.warn("Backend save notice:", err);
+      }
     });
   }
 })();
@@ -4267,9 +4268,6 @@ document
 
   }
 
-  // Export for other independently-scoped workspace modules.
-  window.showNetworkToast = showNetworkToast;
-
 })();
 
 
@@ -5215,157 +5213,42 @@ document
 
   function placeDefaults() {
 
-    const w =
-      stage.clientWidth;
+    // Modern vertical timeline: two-column event stream, one vertical
+    // scrollbar, with enough room to grow as more events are added.
+    const w = stage.clientWidth;
+    const gapX = 24;
+    const gapY = 24;
+    const padX = 34;
+    const padTop = 86;
+    const cardW = Math.min(360, Math.max(240, (w - padX * 2 - gapX) / 2));
+    const cardH = 184;
+    const rows = Math.ceil(cards.length / 2);
+    const rowH = cardH + gapY;
+    const neededH = padTop + rows * rowH + 72;
 
-    const h =
-      stage.clientHeight;
+    stage.style.width = '100%';
+    stage.style.minWidth = '0';
+    stage.style.height = Math.max(900, neededH) + 'px';
+    stage.style.minHeight = Math.max(900, neededH) + 'px';
 
+    cards.forEach((card, i) => {
+      const row = Math.floor(i / 2);
+      const col = i % 2;
+      const x = padX + col * (cardW + gapX);
+      const y = padTop + row * rowH;
 
-    const insetX =
-      w * 0.07;
-
-    const insetY =
-      h * 0.11;
-
-    const insetBottom =
-      h * 0.12;
-
-    const gap = 18;
-
-
-    const gridW =
-      w -
-      insetX * 2;
-
-
-    const gridH =
-      h -
-      insetY -
-      insetBottom;
-
-
-    const cellW =
-      (
-        gridW -
-        gap * 3
-      ) / 4;
-
-
-    const cellH =
-      (
-        gridH -
-        gap * 3
-      ) / 4;
-
-
-    cards.forEach(
-      (card, i) => {
-
-        const row =
-          Math.floor(
-            i / 4
-          );
-
-
-        const col =
-          row === 0
-            ? i
-            : 3 -
-              (i - 4);
-
-
-        const cx =
-          insetX +
-          col *
-            (
-              cellW +
-              gap
-            ) +
-          cellW / 2;
-
-
-        const cy =
-          insetY +
-          row *
-            (
-              cellH +
-              gap
-            ) +
-          cellH / 2;
-
-
-        const x =
-          Math.round(
-            cx -
-            card.offsetWidth /
-              2
-          );
-
-
-        const y =
-          Math.round(
-            cy -
-            card.offsetHeight /
-              2
-          );
-
-
-        card.style.setProperty(
-          "left",
-          Math.max(
-            8,
-            Math.min(
-              w -
-                card.offsetWidth -
-                8,
-              x
-            )
-          ) +
-            "px",
-          "important"
-        );
-
-
-        card.style.setProperty(
-          "top",
-          Math.max(
-            32,
-            Math.min(
-              h -
-                card.offsetHeight -
-                18,
-              y
-            )
-          ) +
-            "px",
-          "important"
-        );
-
-
-        card.style.right =
-          "auto";
-
-        card.style.bottom =
-          "auto";
-
-
-        card.style.setProperty(
-          "--snake-row",
-          row
-        );
-
-
-        card.style.setProperty(
-          "--snake-col",
-          col
-        );
-
-      }
-    );
+      card.style.setProperty('left', Math.max(10, x) + 'px', 'important');
+      card.style.setProperty('top', y + 'px', 'important');
+      card.style.setProperty('width', cardW + 'px', 'important');
+      card.style.setProperty('height', cardH + 'px', 'important');
+      card.style.setProperty('min-height', cardH + 'px', 'important');
+      card.style.right = 'auto';
+      card.style.bottom = 'auto';
+      card.style.setProperty('--timeline-row', row);
+      card.style.setProperty('--timeline-col', col);
+    });
 
   }
-
 
   function cursorPoint(
     index
@@ -6464,7 +6347,7 @@ document
       ) {
 
         showNetworkToast(
-          "Timeline cards returned to the fixed 4 × 4 snake pattern."
+          "Timeline layout reset."
         );
 
       }
@@ -7510,9 +7393,6 @@ document
   const filterButtons = [
     { id: "gisFilterAll", filter: "all" },
     { id: "gisFilterPersons", filter: "person" },
-    { id: "gisFilterVehicles", filter: "vehicle" },
-    { id: "gisFilterPlaces", filter: "place" },
-    { id: "gisFilterComms", filter: "comms" }
   ];
 
   filterButtons.forEach(fb => {
@@ -8620,6 +8500,115 @@ document
     }, 800);
   }
 
+  const positionStorageKey = (caseId) => `cipher-network-positions-${caseId}`;
+
+  function restoreSavedPositions(cyInstance, caseId) {
+    if (!cyInstance) return 0;
+    try {
+      const raw = localStorage.getItem(positionStorageKey(caseId));
+      if (!raw) return 0;
+      const saved = JSON.parse(raw);
+      let restored = 0;
+      cyInstance.nodes().forEach(node => {
+        const pos = saved[String(node.id())];
+        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+          node.position({ x: pos.x, y: pos.y });
+          restored++;
+        }
+      });
+      return restored;
+    } catch (err) {
+      console.warn('Could not restore network positions:', err);
+      return 0;
+    }
+  }
+
+  function saveNetworkPositions(cyInstance, caseId) {
+    if (!cyInstance) return;
+    try {
+      const positions = {};
+      cyInstance.nodes().forEach(node => {
+        const p = node.position();
+        positions[String(node.id())] = { x: Number(p.x), y: Number(p.y) };
+      });
+      localStorage.setItem(positionStorageKey(caseId), JSON.stringify(positions));
+    } catch (err) {
+      console.warn('Could not save network positions:', err);
+    }
+  }
+
+  function graphNodeClass(type) {
+    const t = String(type || '').toLowerCase();
+    if (t.includes('person') || t.includes('suspect') || t.includes('kingpin') || t.includes('driver')) return 'node-person';
+    if (t.includes('organis') || t.includes('company') || t.includes('business')) return 'node-org';
+    if (t.includes('phone') || t.includes('msisdn') || t.includes('mobile')) return 'node-phone';
+    if (t.includes('account') || t.includes('financial') || t.includes('bank')) return 'node-finance';
+    if (t.includes('vehicle') || t.includes('car')) return 'node-vehicle';
+    if (t.includes('place') || t.includes('location') || t.includes('vault') || t.includes('terminal')) return 'node-place';
+    return 'node-evidence';
+  }
+
+  function nodeRadiusFor(data, degree) {
+    const type = String(data?.type || '').toLowerCase();
+    const isPerson = type.includes('person') || type.includes('suspect') || type.includes('kingpin');
+    if (degree >= 7) return isPerson ? 25 : 21;
+    if (degree >= 4) return isPerson ? 21 : 18;
+    if (degree >= 2) return isPerson ? 18 : 15;
+    return isPerson ? 15 : 12;
+  }
+
+  function createFlowLayer(cyInstance) {
+    if (!container || !cyInstance) return null;
+    container.querySelector('.network-flow-layer')?.remove();
+    const layer = document.createElement('div');
+    layer.className = 'network-flow-layer';
+    layer.setAttribute('aria-hidden', 'true');
+    container.appendChild(layer);
+
+    const particles = [];
+    const edges = () => cyInstance.edges().filter(e => !e.hasClass('dimmed') && e.source().visible() && e.target().visible());
+    const rebuild = () => {
+      const wanted = Math.min(28, Math.max(10, cyInstance.edges().length));
+      while (particles.length < wanted) {
+        const dot = document.createElement('i');
+        dot.className = 'network-flow-particle';
+        layer.appendChild(dot);
+        particles.push({ dot, edgeIndex: particles.length, offset: Math.random(), speed: .000055 + Math.random() * .000045 });
+      }
+      while (particles.length > wanted) {
+        particles.pop().dot.remove();
+      }
+    };
+    rebuild();
+
+    let raf = 0;
+    const tick = (now) => {
+      if (!document.body.contains(layer) || window.__cipherNetworkFlowStopped) return;
+      const list = edges();
+      if (list.length) {
+        particles.forEach((particle, i) => {
+          const edge = list[(particle.edgeIndex + i) % list.length];
+          if (!edge) return;
+          const a = edge.source().renderedPosition();
+          const b = edge.target().renderedPosition();
+          if (!a || !b) return;
+          const t = (particle.offset + now * particle.speed) % 1;
+          // Approximate the Cytoscape bezier with a gently bowed midpoint.
+          const mx = (a.x + b.x) / 2 + (b.y - a.y) * .035;
+          const my = (a.y + b.y) / 2 - (b.x - a.x) * .035;
+          const u = 1 - t;
+          const x = u*u*a.x + 2*u*t*mx + t*t*b.x;
+          const y = u*u*a.y + 2*u*t*my + t*t*b.y;
+          particle.dot.style.transform = `translate3d(${x - 2}px,${y - 2}px,0)`;
+          particle.dot.style.opacity = edge.hasClass('highlighted-edge') ? '.95' : '.42';
+        });
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return { rebuild, destroy(){ cancelAnimationFrame(raf); layer.remove(); } };
+  }
+
   async function loadNetworkGraph(caseId = 1) {
     if (!container || typeof cytoscape === "undefined") return;
 
@@ -8666,18 +8655,18 @@ document
         statsEl.textContent = `${window.CipherCaseState?.caseNumber || "ACTIVE CASE"} · ${normalizedNodes.length} NODES · ${validEdges.length} LINKS${store}`;
       }
 
-      // Prepare nodes with custom vector cards
+      // Prepare lightweight circular intelligence nodes. Size follows relationship degree.
       const nodes = normalizedNodes.map(n => {
         const id = String(n.id);
         const deg = degreeMap[id] || 0;
-        const svgUri = buildTacticalNodeSvg(n, deg);
         return {
           data: {
             ...n,
             id: id,
             degree: deg,
-            svgUri: svgUri
-          }
+            nodeSize: nodeRadiusFor(n, deg) * 2
+          },
+          classes: graphNodeClass(n.type)
         };
       });
 
@@ -8716,23 +8705,47 @@ document
           {
             selector: 'node',
             style: {
-              'shape': 'rectangle',
-              'width': 204,
-              'height': 92,
-              'background-color': 'transparent',
-              'background-image': 'data(svgUri)',
-              'background-fit': 'contain',
-              'background-clip': 'none',
-              'border-width': 0,
-              'label': '', // Rendered inside vector SVG
-              'transition-duration': '0.2s',
+              'shape': 'ellipse',
+              'width': 'data(nodeSize)',
+              'height': 'data(nodeSize)',
+              'background-color': '#8d9892',
+              'background-opacity': 0.94,
+              'border-width': 2.2,
+              'border-color': '#dce7df',
+              'border-opacity': 0.92,
+              'shadow-opacity': 0.72,
+              'shadow-blur': 14,
+              'shadow-color': '#d9ff55',
+              'shadow-offset-x': 0,
+              'shadow-offset-y': 0,
+              'label': 'data(label)',
+              'font-family': 'DM Mono, monospace',
+              'font-size': 9,
+              'font-weight': 600,
+              'color': '#dce5df',
+              'text-outline-color': '#050806',
+              'text-outline-width': 3,
+              'text-margin-y': -16,
+              'text-max-width': 150,
+              'text-wrap': 'ellipsis',
+              'min-zoomed-font-size': 7,
+              'overlay-opacity': 0,
+              'transition-property': 'shadow-blur, shadow-color, shadow-opacity, opacity, background-color, border-color, border-width',
+              'transition-duration': '0.28s',
               'cursor': 'pointer'
             }
           },
+          { selector: 'node.node-person', style: { 'background-color': '#d9ff55', 'border-color': '#f4ffc4', 'shadow-color': '#d9ff55', 'shadow-blur': 22, 'shadow-opacity': 0.92 } },
+          { selector: 'node.node-org', style: { 'background-color': '#b7c1ba', 'border-color': '#f0f5f1', 'shadow-color': '#b7c1ba', 'shadow-blur': 15, 'shadow-opacity': 0.72 } },
+          { selector: 'node.node-phone', style: { 'background-color': '#45e0c1', 'border-color': '#b9fff0', 'shadow-color': '#45e0c1', 'shadow-blur': 19, 'shadow-opacity': 0.9 } },
+          { selector: 'node.node-finance', style: { 'background-color': '#57c9e8', 'border-color': '#d1f8ff', 'shadow-color': '#57c9e8', 'shadow-blur': 19, 'shadow-opacity': 0.88 } },
+          { selector: 'node.node-vehicle', style: { 'background-color': '#e7b949', 'border-color': '#fff0b8', 'shadow-color': '#e7b949', 'shadow-blur': 17, 'shadow-opacity': 0.82 } },
+          { selector: 'node.node-place', style: { 'background-color': '#f06a82', 'border-color': '#ffd0d8', 'shadow-color': '#f06a82', 'shadow-blur': 18, 'shadow-opacity': 0.86 } },
+          { selector: 'node.node-evidence', style: { 'background-color': '#ff766b', 'border-color': '#ffd6d1', 'shadow-color': '#ff766b', 'shadow-blur': 16, 'shadow-opacity': 0.82 } },
           {
             selector: 'edge',
             style: {
-              'label': 'data(label)',
+              'label': '',
               'color': '#f1f5f9',
               'font-size': '10px',
               'font-family': 'DM Mono, monospace',
@@ -8745,15 +8758,23 @@ document
               'text-border-color': '#2a3f55',
               'text-border-width': 1,
               'text-border-opacity': 1,
-              'line-color': '#334e68',
+              'line-color': 'rgba(160,181,169,.38)',
               'curve-style': 'bezier',
               'target-arrow-shape': 'triangle',
-              'target-arrow-color': '#334e68',
+              'target-arrow-color': 'rgba(160,181,169,.42)',
               'arrow-scale': 1.25,
-              'width': 3.2,
+              'width': 1.35,
               'min-zoomed-font-size': 8,
+              'text-opacity': 0,
               'transition-property': 'line-color, target-arrow-color, width, opacity',
               'transition-duration': '0.2s'
+            }
+          },
+          {
+            selector: 'edge.highlighted-edge',
+            style: {
+              'label': 'data(label)',
+              'text-opacity': 1
             }
           },
           {
@@ -8771,24 +8792,37 @@ document
           {
             selector: 'node:selected',
             style: {
+              'shadow-blur': 28,
+              'shadow-color': '#00e5ff',
+              'shadow-opacity': 0.95
             }
           },
           {
             selector: 'node.highlighted',
             style: {
+              'shadow-blur': 24,
+              'shadow-color': '#00f0aa',
+              'shadow-opacity': 0.9
             }
           },
           {
             selector: 'edge.highlighted-edge',
             style: {
-              'line-color': '#00e5ff',
-              'target-arrow-color': '#00e5ff',
-              'width': 4,
+              'label': 'data(label)',
+              'text-opacity': 1,
+              'line-color': '#d9ff55',
+              'target-arrow-color': '#d9ff55',
+              'width': 2.4,
+              'shadow-blur': 12,
+              'shadow-color': '#00e5ff'
             }
           },
           {
             selector: 'node.path-node',
             style: {
+              'shadow-blur': 30,
+              'shadow-color': '#fbbf24',
+              'shadow-opacity': 1
             }
           },
           {
@@ -8797,11 +8831,16 @@ document
               'line-color': '#fbbf24',
               'target-arrow-color': '#fbbf24',
               'width': 4.5,
+              'shadow-blur': 14,
+              'shadow-color': '#fbbf24'
             }
           },
           {
             selector: 'node.pattern-alert',
             style: {
+              'shadow-blur': 30,
+              'shadow-color': '#ff4d6d',
+              'shadow-opacity': 1
             }
           },
           {
@@ -8818,8 +8857,18 @@ document
         showNetworkToast('Verified nodes loaded, but no verified relationships are available yet. Accept relationship findings in Review to draw connections.');
       }
 
-      // Default to Tiered Hierarchy layout matching intelligence reference
-      applyTieredHierarchyLayout(cy, false);
+      // Obsidian-style force layout: connected web first, then investigator-controlled positions.
+      const restoredCount = restoreSavedPositions(cy, caseId);
+      if (restoredCount === 0) {
+        applyOrganicForceLayout(cy);
+      } else {
+        cy.resize();
+        cy.fit(undefined, 45);
+      }
+      const flowLayer = createFlowLayer(cy);
+      cy.on('dragfree', 'node', () => saveNetworkPositions(cy, caseId));
+      cy.on('drag', 'node', () => saveNetworkPositions(cy, caseId));
+      cy.on('layoutstop', () => saveNetworkPositions(cy, caseId));
 
       // Tap Node handler -> Inspector & GIS Pan
       cy.on('tap', 'node', (evt) => {
@@ -8965,6 +9014,7 @@ document
   hierarchicalBtn?.addEventListener("click", () => {
     if (cy) {
       applyTieredHierarchyLayout(cy, true);
+      setTimeout(() => saveNetworkPositions(cy, window.CipherCaseState?.id || 1), 800);
       if (typeof toast === "function") {
         toast("Tiered Intelligence Flow applied.");
       } else if (typeof showNetworkToast === "function") {
@@ -8978,6 +9028,7 @@ document
   autoLayoutBtn?.addEventListener("click", () => {
     if (cy) {
       applyOrganicForceLayout(cy);
+      setTimeout(() => saveNetworkPositions(cy, window.CipherCaseState?.id || 1), 900);
       if (typeof toast === "function") {
         toast("Organic force-directed layout recalculated.");
       } else if (typeof showNetworkToast === "function") {
@@ -11501,4 +11552,48 @@ document
   } else {
     bindReviewEvents();
   }
+})();
+
+/* ===== FRONTEND-ONLY IMMERSIVE FULLSCREEN CONTROLS ===== */
+(function initCipherFullscreenControls(){
+  if (window.__cipherFullscreenControlsInitialized) return;
+  window.__cipherFullscreenControlsInitialized = true;
+
+  const enterFullscreen = async (target, button) => {
+    if (!target) return;
+    try {
+      if (document.fullscreenElement === target) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (document.fullscreenElement) await document.exitFullscreen();
+      if (target.requestFullscreen) await target.requestFullscreen({navigationUI:'hide'});
+      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+    } catch (err) {
+      console.warn('Fullscreen unavailable:', err);
+      if (button) button.blur();
+    }
+  };
+
+  const networkButton = document.getElementById('networkFullscreenBtn');
+  const gisButton = document.getElementById('gisFullscreenBtn');
+  const networkTarget = document.querySelector('.network-workbench');
+  const gisTarget = document.querySelector('.gis-workbench');
+
+  networkButton?.addEventListener('click', () => enterFullscreen(networkTarget, networkButton));
+  gisButton?.addEventListener('click', () => enterFullscreen(gisTarget, gisButton));
+
+  document.addEventListener('fullscreenchange', () => {
+    const active = document.fullscreenElement;
+    if (networkButton) {
+      const on = active === networkTarget;
+      networkButton.querySelector('b')?.replaceChildren(document.createTextNode(on ? 'EXIT FULLSCREEN' : 'FULLSCREEN'));
+    }
+    if (gisButton) {
+      const on = active === gisTarget;
+      gisButton.querySelector('b')?.replaceChildren(document.createTextNode(on ? 'EXIT FULLSCREEN' : 'FULLSCREEN MAP'));
+    }
+    window.dispatchEvent(new Event('resize'));
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 180);
+  });
 })();
