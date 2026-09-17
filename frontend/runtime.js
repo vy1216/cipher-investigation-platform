@@ -98,6 +98,8 @@
     clearTimeout(el._timer); el._timer = setTimeout(() => el.style.display = "none", 3500);
   }
 
+  window.cipherSetCaseState = null;
+
   function setCaseState(c) {
     if (!c) return;
     const dbId = Number(c.id);
@@ -116,6 +118,8 @@
     syncReportFromCase(c);
     return c;
   }
+
+window.cipherSetCaseState = setCaseState;
 
   async function apiJson(url, options={}) {
     const res = await fetch(url, options);
@@ -185,6 +189,8 @@
       return [];
     }
   }
+
+window.cipherLoadCases = loadCases;
 
   function renderCases(cases) {
     const cards = [...document.querySelectorAll("#cipherWorkspace .floating-case")];
