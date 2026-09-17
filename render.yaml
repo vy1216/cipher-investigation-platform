@@ -1,0 +1,97 @@
+services:
+  - type: web
+    name: cipher-api
+    runtime: python
+    buildCommand: pip install -r python_backend/requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: NEO4J_DATABASE
+        value: neo4j
+      - key: NEO4J_REQUIRED_FOR_GRAPH
+        value: "true"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_MODEL_FALLBACKS
+        value: ""
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: cipher-evidence
+      - key: CIPHER_CORS_ORIGINS
+        sync: false
+      - key: CIPHER_UPLOADS_DIR
+        value: /tmp/cipher-uploads
+      - key: CIPHER_FRONTEND_DIR
+        value: ./frontend
+      - key: MAX_UPLOAD_BYTES
+        value: "10485760"
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: CIPHER_USE_BACKGROUND_TASKS
+        value: "false"
+
+  - type: worker
+    name: cipher-evidence-worker
+    runtime: python
+    buildCommand: pip install -r python_backend/requirements.txt
+    startCommand: python -m python_backend.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: NEO4J_DATABASE
+        value: neo4j
+      - key: NEO4J_REQUIRED_FOR_GRAPH
+        value: "true"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_MODEL_FALLBACKS
+        value: ""
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: cipher-evidence
+      - key: CIPHER_UPLOADS_DIR
+        value: /tmp/cipher-uploads
+      - key: CIPHER_FRONTEND_DIR
+        value: ./frontend
+      - key: MAX_UPLOAD_BYTES
+        value: "10485760"
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: CIPHER_USE_BACKGROUND_TASKS
+        value: "false"
+      - key: CIPHER_WORKER_POLL_SECONDS
+        value: "2"
+      - key: CIPHER_WORKER_BATCH_SIZE
+        value: "2"
