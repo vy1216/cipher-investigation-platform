@@ -2254,367 +2254,128 @@ document
 
 
   function orbitLoop() {
-
-    if (
-      !workspace.classList.contains(
-        "open"
-      )
-    ) {
-
-      orbitRunning =
-        false;
-
-      orbitRAF =
-        null;
-
+    if (!workspace.classList.contains("open")) {
+      orbitRunning = false;
+      orbitRAF = null;
       return;
-
     }
 
-
+    // Stable carousel physics: velocity controls the angular position only.
+    // Every card is always calculated from the same center + fixed angular slot.
     if (state.drag) {
-
-      state.angularVelocity *=
-        0.995;
-
-    }
-
-    else if (
-      state.snapTarget !== null
-    ) {
-
-      const delta =
-        state.snapTarget -
-        state.angle;
-
-
-      state.angle +=
-        delta * 0.095;
-
-
-      state.angularVelocity *=
-        0.82;
-
-
-      if (
-        Math.abs(delta) <
-        0.06
-      ) {
-
-        state.angle =
-          state.snapTarget;
-
-        state.snapTarget =
-          null;
-
-        state.angularVelocity =
-          0;
-
+      state.angularVelocity *= 0.985;
+    } else if (state.snapTarget !== null) {
+      const delta = shortestDelta(state.snapTarget, state.angle);
+      state.angle += delta * 0.105;
+      state.angularVelocity *= 0.80;
+      if (Math.abs(delta) < 0.08) {
+        state.angle = state.snapTarget;
+        state.snapTarget = null;
+        state.angularVelocity = 0;
       }
-
+    } else if (!state.focusedCard) {
+      state.angularVelocity += 0.00042;
+      state.angularVelocity *= 0.992;
+      if (Math.abs(state.angularVelocity) < 0.010) state.angularVelocity = 0.016;
+      state.angularVelocity = clamp(state.angularVelocity, -1.6, 1.6);
+      state.angle += state.angularVelocity;
     }
-
-    else if (
-      !state.focusedCard
-    ) {
-
-      state.angularVelocity +=
-        0.00042;
-
-      state.angularVelocity *=
-        0.986;
-
-
-      state.angularVelocity =
-        clamp(
-          state.angularVelocity,
-          -1.8,
-          1.8
-        );
-
-
-      state.angle +=
-        state.angularVelocity;
-
-    }
-
 
     if (state.focusedCard) {
-
-      const arrival =
-        state.snapTarget === null
-          ? 1
-          : clamp(
-              1 -
-                Math.abs(
-                  state.snapTarget -
-                  state.angle
-                ) /
-                  45,
-              0,
-              1
-            );
-
-
-      state.focusProgress +=
-        (
-          arrival -
-          state.focusProgress
-        ) *
-        0.09;
-
+      const arrival = state.snapTarget === null
+        ? 1
+        : clamp(1 - Math.abs(shortestDelta(state.snapTarget, state.angle)) / 45, 0, 1);
+      state.focusProgress += (arrival - state.focusProgress) * 0.10;
+    } else {
+      state.focusProgress *= 0.88;
     }
 
-    else {
-
-      state.focusProgress *=
-        0.88;
-
-    }
-
-
-    state.targetTiltX +=
-      (
-        -11 -
-        state.targetTiltX
-      ) *
-      0.006;
-
-
-    state.targetTiltZ +=
-      (
-        -3.5 -
-        state.targetTiltZ
-      ) *
-      0.006;
-
-
-    state.tiltX +=
-      (
-        state.targetTiltX -
-        state.tiltX
-      ) *
-      0.08;
-
-
-    state.tiltZ +=
-      (
-        state.targetTiltZ -
-        state.tiltZ
-      ) *
-      0.08;
-
-
-    const r =
-      stage.getBoundingClientRect();
-
-
-    const mobile =
-      r.width < 700;
-
-
-    const rx =
-      Math.min(
-        r.width *
-          (mobile
-            ? 0.34
-            : 0.38),
-        mobile
-          ? 270
-          : 510
-      ) +
-      state.radiusBoost;
-
-
-    const ry =
-      Math.min(
-        r.height *
-          (mobile
-            ? 0.25
-            : 0.29),
-        mobile
-          ? 155
-          : 190
-      );
-
-
-    const depth =
-      mobile
-        ? 105
-        : 185;
-
-
-    const n =
-      cards.length;
-
-
-    cards.forEach(
-      (card, i) => {
-
-        const phase =
-          (
-            i / n
-          ) *
-          Math.PI *
-          2 +
-          state.angle *
-            Math.PI /
-            180;
-
-
-        const x =
-          Math.cos(phase) *
-          rx;
-
-
-        const y =
-          Math.sin(phase) *
-          ry;
-
-
-        const z =
-          Math.sin(phase) *
-          depth;
-
-
-        const front =
-          (
-            z + depth
-          ) /
-          (
-            depth * 2
-          );
-
-
-        const baseScale =
-          mobile
-            ? 0.76 +
-              front * 0.12
-            : 0.80 +
-              front * 0.16;
-
-
-        const isFocused =
-          state.focusedCard ===
-          card;
-
-
-        const p =
-          state.focusProgress;
-
-
-        const focusX =
-          isFocused
-            ? x * (1 - p)
-            : x;
-
-
-        const focusY =
-          isFocused
-            ? y * (1 - p)
-            : y;
-
-
-        const focusZ =
-          isFocused
-            ? z * (1 - p) +
-              125 * p
-            : z;
-
-
-        const focusScale =
-          isFocused
-            ? 1 + 0.20 * p
-            : 1;
-
-
-        const rotY =
-          -Math.cos(phase) *
-          18;
-
-
-        const rotX =
-          state.tiltX -
-          Math.sin(phase) *
-            5;
-
-
-        const transform =
-          `translate3d(calc(-50% + ${focusX}px),calc(-50% + ${focusY}px),${focusZ}px) rotateZ(${state.tiltZ}deg) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${baseScale * focusScale})`;
-
-
-        card.style.setProperty(
-          "--case-transform",
-          transform
-        );
-
-
-        card.style.transform =
-          transform;
-
-
-        card.style.zIndex =
-          isFocused
-            ? "9999"
-            : String(
-                Math.round(
-                  100 +
-                  front *
-                    100
-                )
-              );
-
-
-        if (isFocused) {
-
-          card.style.opacity =
-            "1";
-
-          card.style.filter =
-            "brightness(1.10) saturate(1.04) blur(0px)";
-
-        }
-
-        else {
-
-          const distanceFromFront =
-            Math.abs(
-              0.5 -
-              front
-            );
-
-
-          const opacity =
-            0.28 +
-            front * 0.36 -
-            distanceFromFront *
-              0.08;
-
-
-          card.style.opacity =
-            String(
-              clamp(
-                opacity,
-                0.20,
-                0.68
-              )
-            );
-
-
-          card.style.filter =
-            `brightness(${0.76 + front * 0.20}) blur(${(1 - front) * 0.75}px)`;
-
-        }
-
+    state.targetTiltX += (-11 - state.targetTiltX) * 0.008;
+    state.targetTiltZ += (-3.5 - state.targetTiltZ) * 0.008;
+    state.tiltX += (state.targetTiltX - state.tiltX) * 0.09;
+    state.tiltZ += (state.targetTiltZ - state.tiltZ) * 0.09;
+
+    const r = stage.getBoundingClientRect();
+    const mobile = r.width < 700;
+    const compact = r.width < 900;
+    const n = Math.max(cards.length, 1);
+
+    // Keep a true, deterministic orbital deck: every case owns one angular
+    // slot and the whole deck rotates around the same center. The deck scale
+    // deliberately steps down as cards are added so a new case cannot make
+    // the cards collide visually. Focus then enlarges only the selected card.
+    const deckScale =
+      n <= 5 ? 0.82 :
+      n === 6 ? 0.72 :
+      n === 7 ? 0.64 :
+      0.58;
+
+    const rx = compact
+      ? Math.min(r.width * (mobile ? 0.48 : 0.43), mobile ? 245 : 430) + state.radiusBoost
+      : Math.min(r.width * 0.39, 500) + state.radiusBoost;
+    const ry = compact
+      ? Math.min(r.height * (mobile ? 0.36 : 0.37), mobile ? 200 : 208)
+      : Math.min(r.height * 0.37, 245);
+    const depth = mobile ? 78 : compact ? 115 : 175;
+
+    cards.forEach((card, i) => {
+      const phase = (i / n) * Math.PI * 2 + (state.angle * Math.PI / 180);
+      const x = Math.cos(phase) * rx;
+      const y = Math.sin(phase) * ry;
+      const z = Math.sin(phase) * depth;
+      const front = (z + depth) / (depth * 2);
+      const baseScale = deckScale * (mobile ? 0.88 + front * 0.08 : 0.90 + front * 0.08);
+      const isFocused = state.focusedCard === card;
+      const p = state.focusProgress;
+
+      const focusX = isFocused ? x * (1 - p) : x;
+      const focusY = isFocused ? y * (1 - p) : y;
+      const focusZ = isFocused ? z * (1 - p) + 125 * p : z;
+      const focusScale = isFocused ? 1 + 0.18 * p : 1;
+      const rotY = -Math.cos(phase) * 16;
+      const rotX = state.tiltX - Math.sin(phase) * 4;
+
+      // Separate transform functions are more reliable across Chromium and
+      // mobile WebViews than translate3d() values containing CSS calc().
+      const transform = [
+        'translate(-50%, -50%)',
+        `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, ${focusZ.toFixed(2)}px)`,
+        `rotateZ(${state.tiltZ.toFixed(2)}deg)`,
+        `rotateX(${rotX.toFixed(2)}deg)`,
+        `rotateY(${rotY.toFixed(2)}deg)`,
+        `scale(${(baseScale * focusScale).toFixed(4)})`
+      ].join(' ');
+
+      // Focus pulls the selected card toward the center while the other cards
+      // retain their exact orbital slots.
+      const focusedTransform = isFocused
+        ? [
+            'translate(-50%, -50%)',
+            `translate3d(${focusX.toFixed(2)}px, ${focusY.toFixed(2)}px, ${focusZ.toFixed(2)}px)`,
+            `rotateZ(${state.tiltZ.toFixed(2)}deg)`,
+            `rotateX(${rotX.toFixed(2)}deg)`,
+            `rotateY(${rotY.toFixed(2)}deg)`,
+            `scale(${(baseScale * focusScale).toFixed(4)})`
+          ].join(' ')
+        : transform;
+
+      card.style.setProperty('--case-transform', focusedTransform);
+      card.style.setProperty('--orbit-transform', focusedTransform);
+      card.style.transform = focusedTransform;
+      card.style.zIndex = isFocused ? '9999' : String(100 + Math.round(front * 100));
+
+      if (isFocused) {
+        card.style.opacity = '1';
+        card.style.filter = 'brightness(1.10) saturate(1.04) blur(0px)';
+      } else {
+        const distanceFromFront = Math.abs(0.5 - front);
+        const opacity = 0.34 + front * 0.42 - distanceFromFront * 0.06;
+        card.style.opacity = String(clamp(opacity, 0.28, 0.76));
+        card.style.filter = `brightness(${0.80 + front * 0.18}) blur(${(1 - front) * 0.55}px)`;
       }
-    );
+    });
 
-
-    orbitRAF =
-      requestAnimationFrame(
-        orbitLoop
-      );
-
+    orbitRAF = requestAnimationFrame(orbitLoop);
   }
 
 })();
@@ -2987,7 +2748,7 @@ document
 
     // Fetch existing count to generate next Case ID
     try {
-      const res = await fetch("/api/cases", {headers: (window.getAuthHeaders ? window.getAuthHeaders(false) : {})});
+      const res = await fetch("/api/cases");
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.cases)) {
@@ -3210,7 +2971,7 @@ document
 
   // Form Submission
   if (caseForm) {
-    caseForm.addEventListener("submit", async (e) => {
+    caseForm.addEventListener("submit", (e) => {
       e.preventDefault();
 
       const title = caseNameInput?.value.trim() || "";
@@ -3246,77 +3007,102 @@ document
         tags
       };
 
-      // 1. Persist to backend first. The UI must never claim a case is created
-      // before PostgreSQL confirms the insert and returns the real numeric id.
-      let savedCase = null;
-      try {
-        const token = localStorage.getItem("cipher_access_token") || localStorage.getItem("token") || "";
-        const headers = { "Content-Type": "application/json" };
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const response = await fetch("/api/cases", { method: "POST", headers, body: JSON.stringify(payload) });
-        const text = await response.text();
-        let data = {};
-        try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
-        if (!response.ok || !data.case) {
-          throw new Error(data.detail || data.error || `Backend returned HTTP ${response.status}`);
-        }
-        savedCase = data.case;
-      } catch (err) {
-        console.error("CIPHER case creation failed:", err);
-        notifyUser(`Case was NOT created: ${err.message}`);
-        return;
-      }
-
-      // 2. Only after the DB confirms success, synchronize the case state/UI.
-      try {
-        if (window.cipherSetCaseState) window.cipherSetCaseState(savedCase);
-        else if (window.CipherCaseState) {
-          window.CipherCaseState.id = Number(savedCase.id);
-          window.CipherCaseState.caseNumber = savedCase.case_number || "";
-          window.CipherCaseState.title = savedCase.title || "";
-        }
-      } catch (stateErr) { console.warn("Case state sync notice:", stateErr); }
-
+      // 1. Immediately close modal and show the green right-side evidence prompt popup
       caseSequence++;
       closeCaseModal();
       caseForm.reset();
-      showEvidencePromptPopup(savedCase);
-      notifyUser(`Case ${savedCase.case_number} created and synchronized with database.`);
+      showEvidencePromptPopup(payload);
+      notifyUser(`Case ${case_number} created and synchronized with database!`);
 
-      // 3. Update the visual case card with the server-backed record.
+      // 2. Add the newly created case to the live orbital deck.
+      // Do not recycle an existing card: every case gets its own orbital slot.
       try {
         if (stage) {
-          const targetBox = stage.querySelector(".c1") || stage.querySelector(".floating-case:not(.case-main)") || stage.querySelector(".floating-case");
-          if (targetBox) {
-            const priorityValue = savedCase.priority || priority;
-            const isHigh = String(priorityValue).toUpperCase().includes("HIGH") || String(priorityValue).toUpperCase().includes("CRITICAL");
-            const cleanLoc = (savedCase.primary_location || primary_location || "Central").split("(")[0].trim();
-            targetBox.dataset.dbId = String(savedCase.id);
-            targetBox.dataset.caseId = savedCase.case_number || case_number;
-            targetBox.dataset.caseType = savedCase.case_type || case_type;
-            targetBox.dataset.priority = priorityValue;
-            targetBox.dataset.description = savedCase.description || description;
-            targetBox.dataset.incidentDate = savedCase.incident_date || incident_date;
-            targetBox.dataset.location = savedCase.primary_location || primary_location;
-            targetBox.dataset.officer = savedCase.assigned_officer || assigned_officer;
-            targetBox.dataset.jurisdiction = savedCase.jurisdiction || jurisdiction;
-            targetBox.dataset.tags = savedCase.tags || tags;
-            targetBox.dataset.isNew = "true";
-            targetBox.classList.add("is-new-case");
-            targetBox.innerHTML = `
-              <div class="case-top"><span>CASE / ${savedCase.case_number || case_number}</span><div style="display:flex;align-items:center;gap:6px;"><b class="${isHigh ? 'high' : ''}">${String(priorityValue).toUpperCase()}</b><span class="case-new-badge">NEW</span></div></div>
-              <h3>${savedCase.title || title}</h3><p>${savedCase.description || description}</p>
-              <div class="case-stats"><span>${savedCase.case_type || case_type}</span><span>${cleanLoc}</span></div>`;
-            if (typeof window.cipherFocusCase === "function") window.cipherFocusCase(targetBox);
+          const existing = Array.from(stage.querySelectorAll(".floating-case"))
+            .find(card => card.dataset.caseId === case_number);
+
+          let targetBox = existing || null;
+
+          if (!targetBox) {
+            targetBox = document.createElement("article");
+            targetBox.className = "floating-case case-back is-new-case";
+            stage.appendChild(targetBox);
+          }
+
+          targetBox.dataset.case = title;
+          targetBox.dataset.caseId = case_number;
+          targetBox.dataset.caseType = case_type;
+          targetBox.dataset.priority = priority;
+          targetBox.dataset.description = description;
+          targetBox.dataset.incidentDate = incident_date;
+          targetBox.dataset.location = primary_location;
+          targetBox.dataset.officer = assigned_officer;
+          targetBox.dataset.jurisdiction = jurisdiction;
+          targetBox.dataset.tags = tags;
+          targetBox.dataset.isNew = "true";
+
+          const isHigh = priority.toUpperCase().includes("HIGH") || priority.toUpperCase().includes("CRITICAL");
+          const cleanLoc = (primary_location || "Central").split("(")[0].trim();
+
+          // Use text nodes/escaped values through DOM textContent rather than
+          // injecting user-entered case fields as executable HTML.
+          targetBox.replaceChildren();
+          const top = document.createElement("div");
+          top.className = "case-top";
+          const idSpan = document.createElement("span");
+          idSpan.textContent = `CASE / ${case_number}`;
+          const priorityWrap = document.createElement("div");
+          priorityWrap.style.cssText = "display:flex;align-items:center;gap:6px;";
+          const priorityEl = document.createElement("b");
+          if (isHigh) priorityEl.className = "high";
+          priorityEl.textContent = priority.toUpperCase();
+          const badge = document.createElement("span");
+          badge.className = "case-new-badge";
+          badge.textContent = "NEW";
+          priorityWrap.append(priorityEl, badge);
+          top.append(idSpan, priorityWrap);
+
+          const titleEl = document.createElement("h3");
+          titleEl.textContent = title;
+          const descEl = document.createElement("p");
+          descEl.textContent = description;
+          const stats = document.createElement("div");
+          stats.className = "case-stats";
+          const typeEl = document.createElement("span");
+          typeEl.textContent = case_type;
+          const locEl = document.createElement("span");
+          locEl.textContent = cleanLoc;
+          stats.append(typeEl, locEl);
+
+          targetBox.append(top, titleEl, descEl, stats);
+
+          // Refresh the orbit's live card collection so the new case gets a
+          // deterministic angular slot immediately, then focus that card.
+          if (typeof window.cipherRefreshCases === "function") {
+            window.cipherRefreshCases();
+          }
+          if (typeof window.cipherFocusCase === "function") {
+            window.cipherFocusCase(targetBox);
           }
         }
-      } catch (orbitErr) { console.warn("Orbit visual update notice:", orbitErr); }
+      } catch (orbitErr) {
+        console.warn("Orbit visual update notice:", orbitErr);
+      }
 
-      // 4. Refresh server-backed case data. Evidence can now safely target the
-      // numeric PostgreSQL case id returned by the create endpoint.
+      // 3. Concurrently sync to backend database
       try {
-        if (window.cipherLoadCases) await window.cipherLoadCases();
-      } catch (refreshErr) { console.warn("Case list refresh notice:", refreshErr); }
+        const token = localStorage.getItem("cipher_access_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        fetch("/api/cases", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload)
+        }).catch(fetchErr => console.warn("Backend save notice:", fetchErr));
+      } catch (err) {
+        console.warn("Backend save notice:", err);
+      }
     });
   }
 })();
@@ -4267,9 +4053,6 @@ document
 
   }
 
-  // Export for other independently-scoped workspace modules.
-  window.showNetworkToast = showNetworkToast;
-
 })();
 
 
@@ -4339,7 +4122,10 @@ document
       return cells;
     }
 
-    const headers = parseLine(lines[0]);
+    // Normalize the first header as well as all header names. Excel/Windows CSV
+    // files frequently carry a UTF-8 BOM (\\uFEFF); if it survives parsing,
+    // `record_type` becomes invisible to the master-CSV detector.
+    const headers = parseLine(lines[0]).map(h => String(h || "").replace(/^\\uFEFF/, "").trim());
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
       const vals = parseLine(lines[i]);
@@ -4362,6 +4148,225 @@ document
       '"': "&quot;"
     })[c]);
   }
+
+  // Build an immediate, local graph preview from the CSV itself. The backend
+  // intentionally queues CSV evidence for verification, so this preview lets
+  // investigators see the relationship structure without pretending that the
+  // pending evidence is already verified. Once the backend finishes/review
+  // accepts the findings, the normal verified graph remains authoritative.
+  function buildLocalCsvGraph(csvText) {
+    const { headers, rows } = parseCsvString(csvText || "");
+    const key = (name) => String(name || "").replace(/^\\uFEFF/, "").trim().toLowerCase();
+    const headerMap = {};
+    headers.forEach(h => { headerMap[key(h)] = h; });
+    const get = (row, ...names) => {
+      for (const n of names) {
+        const actual = headerMap[key(n)];
+        if (actual && row[actual] != null && String(row[actual]).trim() !== "") return String(row[actual]).trim();
+      }
+      return "";
+    };
+    const clean = (v) => {
+      const x = String(v || "").trim();
+      return !x || /^(nan|null|undefined)$/i.test(x) ? "" : x;
+    };
+
+    const nodeMap = new Map();
+    const edges = [];
+    let edgeSeq = 0;
+    const ensureNode = (id, label, type, extra = {}) => {
+      id = clean(id); label = clean(label) || id;
+      if (!id) id = `csv-node-${nodeMap.size + 1}`;
+      if (!nodeMap.has(id)) {
+        nodeMap.set(id, { id, label, type: clean(type) || "entity", aliases: extra.aliases || "", confidence: 1, status: "pending", ...extra });
+      } else {
+        const n = nodeMap.get(id);
+        if ((!n.label || n.label === n.id) && label) n.label = label;
+        if ((!n.type || n.type === "entity") && type) n.type = type;
+      }
+      return id;
+    };
+    const addEdge = (source, target, rel, evidence = "") => {
+      source = clean(source); target = clean(target);
+      if (!source || !target || source === target) return;
+      ensureNode(source, source, "entity");
+      ensureNode(target, target, "entity");
+      edges.push({ id: `csv-edge-${++edgeSeq}`, source, target, label: clean(rel) || "ASSOCIATED_WITH", relationship_type: clean(rel) || "ASSOCIATED_WITH", evidence, confidence: 1, status: "pending" });
+    };
+
+    // Format A: compact investigation CSV with one entity per row and
+    // connected_to / relationship columns.
+    const simpleName = headerMap.name || headerMap.label || headerMap.entity || headerMap.person;
+    const simpleConnect = headerMap.connected_to || headerMap.connected || headerMap.target || headerMap.target_node || headerMap.related_entity_id;
+    if (simpleName && (simpleConnect || headerMap.relationship || headerMap.relationship_type)) {
+      rows.forEach((row, idx) => {
+        const label = clean(get(row, "name", "label", "entity", "person"));
+        if (!label) return;
+        const type = clean(get(row, "type", "entity_type", "category")) || "entity";
+        const id = clean(get(row, "entity_id", "id")) || `csv-${idx + 1}`;
+        const aliases = clean(get(row, "aliases", "alias", "role"));
+        ensureNode(id, label, type, { aliases });
+        const targetLabel = clean(get(row, "connected_to", "connected", "target", "target_node", "related_entity_id"));
+        if (targetLabel) {
+          // Prefer an existing ID/label, otherwise create a stable label-derived ID.
+          let targetId = targetLabel;
+          const existing = [...nodeMap.values()].find(n => n.label.toLowerCase() === targetLabel.toLowerCase());
+          if (existing) targetId = existing.id;
+          else targetId = `csv-target-${targetLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || edgeSeq + 1}`;
+          ensureNode(targetId, targetLabel, "entity");
+          addEdge(id, targetId, get(row, "relationship", "relationship_type", "relation", "link_type"), get(row, "evidence", "source_reference"));
+        }
+      });
+    }
+
+    // Format A2: split entity + relationship rows. This is common for
+    // investigator-created CSVs: entity rows use name/type, while relationship
+    // rows use source/target/relationship/evidence.
+    if (headerMap.source && headerMap.target) {
+      rows.forEach((row, idx) => {
+        const label = clean(get(row, "name", "label", "entity", "person"));
+        if (!label) return;
+        const type = clean(get(row, "type", "entity_type", "category")) || "entity";
+        const id = clean(get(row, "entity_id", "id")) || `csv-${idx + 1}`;
+        ensureNode(id, label, type, {
+          aliases: clean(get(row, "aliases", "alias", "role")),
+          lat: get(row, "latitude", "lat"),
+          lng: get(row, "longitude", "lng")
+        });
+      });
+      const resolveRef = (ref) => {
+        ref = clean(ref);
+        if (!ref) return "";
+        if (nodeMap.has(ref)) return ref;
+        const match = [...nodeMap.values()].find(n => String(n.label).toLowerCase() === ref.toLowerCase());
+        return match ? match.id : `csv-ref-${ref.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || edgeSeq + 1}`;
+      };
+      rows.forEach((row) => {
+        const source = resolveRef(get(row, "source", "source_id", "source_entity_id", "relationship_source"));
+        const target = resolveRef(get(row, "target", "target_id", "target_entity_id", "relationship_target"));
+        if (!source || !target) return;
+        const sourceLabel = clean(get(row, "source"));
+        const targetLabel = clean(get(row, "target"));
+        if (!nodeMap.has(source)) ensureNode(source, sourceLabel || source, "entity");
+        if (!nodeMap.has(target)) ensureNode(target, targetLabel || target, "entity");
+        addEdge(source, target, get(row, "relationship", "relationship_type", "relation", "link_type"), get(row, "evidence", "source_reference", "reason"));
+      });
+    }
+
+    // Format B: CIPHER master CSV with record_type=nodes / relationships.
+    const recordTypeHeader = headerMap.record_type;
+    if (recordTypeHeader) {
+      rows.forEach((row, idx) => {
+        const recordType = clean(row[recordTypeHeader]).toLowerCase();
+        if (recordType === "nodes") {
+          const id = clean(get(row, "entity_id", "id")) || `csv-node-${idx + 1}`;
+          const label = clean(get(row, "name", "label", "entity")) || id;
+          const type = clean(get(row, "type", "entity_type", "category")) || "entity";
+          ensureNode(id, label, type, { aliases: clean(get(row, "aliases", "alias")), lat: get(row, "latitude", "lat"), lng: get(row, "longitude", "lng") });
+        }
+      });
+      rows.forEach((row) => {
+        if (clean(row[recordTypeHeader]).toLowerCase() !== "relationships") return;
+        const sourceRaw = clean(get(row, "source_id", "source_entity_id", "source", "relationship_source"));
+        const targetRaw = clean(get(row, "target_id", "target_entity_id", "target", "relationship_target"));
+        const rel = clean(get(row, "relationship_type", "relationship", "relation"));
+        const resolveMasterRef = (ref) => {
+          if (!ref) return "";
+          if (nodeMap.has(ref)) return ref;
+          const match = [...nodeMap.values()].find(n => String(n.label || "").trim().toLowerCase() === ref.toLowerCase());
+          if (match) return match.id;
+          return ref;
+        };
+        const source = resolveMasterRef(sourceRaw);
+        const target = resolveMasterRef(targetRaw);
+        if (source && target) addEdge(source, target, rel, get(row, "source_reference", "evidence", "reason"));
+      });
+    }
+
+    if (!nodeMap.size) return null;
+    return {
+      nodes: [...nodeMap.values()],
+      edges,
+      source: "csv-preview",
+      filename: currentFilename,
+      pending: true,
+      rowCount: rows.length
+    };
+  }
+
+  window.CipherBuildLocalCsvGraph = buildLocalCsvGraph;
+
+
+  // Build a temporal trace directly from the same CSV preview. Relationship
+  // evidence often carries an ISO date prefix (e.g. "2026-01-14:"); explicit
+  // event/date columns are preferred when present. This remains PENDING until
+  // the evidence pipeline verifies it.
+  function buildLocalCsvTimeline(csvText) {
+    const { headers, rows } = parseCsvString(csvText || "");
+    const key = (name) => String(name || "").trim().toLowerCase().replace(/\s+/g, "_");
+    const headerMap = {};
+    headers.forEach(h => { headerMap[key(h)] = h; });
+    const get = (row, ...names) => {
+      for (const n of names) {
+        const actual = headerMap[key(n)];
+        if (actual && row[actual] != null && String(row[actual]).trim() !== "") return String(row[actual]).trim();
+      }
+      return "";
+    };
+    const clean = v => String(v || "").trim();
+    const events = [];
+    const seen = new Set();
+    const parseDate = raw => {
+      const value = clean(raw);
+      const m = value.match(/\b(20\d{2}|19\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/);
+      if (m) return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0,10);
+    };
+    const add = (dateRaw, title, description, type, tags = [], meta = {}) => {
+      const date = parseDate(dateRaw);
+      if (!date && !title) return;
+      const signature = `${date}|${title}|${description}|${type}`.toLowerCase();
+      if (seen.has(signature)) return;
+      seen.add(signature);
+      events.push({
+        event_time: date || "",
+        title: clean(title) || "Investigation event",
+        description: clean(description) || "CSV evidence event pending verification.",
+        event_type: clean(type) || "EVENT",
+        tags: tags.filter(Boolean).slice(0,3),
+        verification_status: "PENDING REVIEW",
+        ...meta
+      });
+    };
+
+    rows.forEach((row, idx) => {
+      const explicitDate = get(row, "event_time", "event_date", "date", "timestamp", "occurred_at", "time_occurred", "time", "datetime");
+      const source = get(row, "source", "source_id", "source_entity_id", "relationship_source");
+      const target = get(row, "target", "target_id", "target_entity_id", "relationship_target");
+      const rel = get(row, "relationship", "relationship_type", "relation", "link_type");
+      const evidence = get(row, "evidence", "source_reference", "reason", "description", "details");
+      const embeddedDate = evidence.match(/\b(?:19|20)\d{2}[-\/.]\d{1,2}[-\/.]\d{1,2}\b/)?.[0] || "";
+      const date = explicitDate || embeddedDate;
+
+      // Relationship rows become temporal events. For split-row CSVs this gives
+      // investigators the actual sequence that produced each network edge.
+      if (source && target) {
+        add(date, `${source} → ${target}`, evidence || `${rel || "ASSOCIATED_WITH"} relationship recorded in CSV.`, rel || "RELATIONSHIP", [rel, "PENDING"]);
+        return;
+      }
+
+      const title = get(row, "event", "event_title", "title", "name", "label");
+      const desc = evidence || get(row, "event_description", "description", "notes", "details");
+      const type = get(row, "event_type", "type", "category") || (title ? "EVENT" : "");
+      if (date && (title || desc)) add(date, title || `CSV event ${idx + 1}`, desc, type, [type, "PENDING"]);
+    });
+
+    events.sort((a,b) => (a.event_time || "9999-99-99").localeCompare(b.event_time || "9999-99-99"));
+    return events;
+  }
+
+  window.CipherBuildLocalCsvTimeline = buildLocalCsvTimeline;
 
   function renderPreviewTable(headers, rows) {
     if (!csvPreviewTable) return;
@@ -4522,10 +4527,57 @@ document
     csvProceedBtn.textContent = "INGESTING DATA...";
 
     try {
+      // Always materialize the selected File into the same CSV text used by the
+      // preview/parser. Previously a File could be sent to the backend while
+      // currentCsvText remained empty, which meant the frontend had nothing to
+      // build the live graph from and could fall back to the old case graph.
+      if (currentFile && !currentCsvText) {
+        currentCsvText = await currentFile.text();
+        currentFilename = currentFile.name || currentFilename;
+      }
+
       const modeRadio = document.querySelector('input[name="cipherCsvImportMode"]:checked');
       const importMode = modeRadio ? modeRadio.value : "replace";
 
       const token = localStorage.getItem("cipher_access_token");
+      const caseId = window.CipherCaseState?.id || 1;
+      // Unified CIPHER master CSVs have a record_type column with typed rows
+      // (nodes, relationships, events, evidence, review_queue, etc.). Route
+      // those through the dedicated master importer; keep ordinary investigator
+      // CSVs on the queued evidence importer.
+      // Detect master CSVs from the parsed header/records rather than regexing
+      // raw text. This handles UTF-8 BOMs, quoted headers, CRLF files and
+      // harmless whitespace consistently.
+      const parsedForImport = parseCsvString(currentCsvText || "");
+      const parsedHeaderKeys = new Set(parsedForImport.headers.map(h => String(h || "").replace(/^\\uFEFF/, "").trim().toLowerCase()));
+      const parsedRecordTypes = new Set(parsedForImport.rows
+        .map(r => String(r[parsedForImport.headers.find(h => String(h || "").trim().toLowerCase() === "record_type") || ""] || "").trim().toLowerCase())
+        .filter(Boolean));
+      const csvLooksLikeMaster = parsedHeaderKeys.has("record_type") &&
+        (parsedRecordTypes.has("nodes") || parsedRecordTypes.has("relationships") || parsedRecordTypes.has("events") || parsedRecordTypes.has("locations"));
+      const importEndpoint = csvLooksLikeMaster
+        ? `/api/cases/${caseId}/import-master-csv`
+        : `/api/cases/${caseId}/import-csv`;
+
+      // Build the graph/timeline from the exact bytes the investigator selected
+      // BEFORE asking the backend to process them. The backend is allowed to be
+      // asynchronous and may also return an already-successful response; neither
+      // case should ever cause an older hard-coded/verified graph to replace the
+      // freshly uploaded CSV.
+      const localCsvGraph = buildLocalCsvGraph(currentCsvText);
+      const localCsvTimeline = buildLocalCsvTimeline(currentCsvText);
+      if (!localCsvGraph) {
+        throw new Error("The selected CSV could not be mapped to network nodes. Expected node/name/entity columns or source/target relationship columns.");
+      }
+      localCsvGraph.pending = true;
+      localCsvGraph.sourceFingerprint = `${currentFilename}|${currentCsvText.length}|${currentCsvText.slice(0,120)}`;
+      window.CipherLocalGraphData = localCsvGraph;
+      window.CipherLocalTimelineData = localCsvTimeline;
+      window.CipherLocalTimelineCaseId = caseId;
+
+      // Render the selected CSV immediately, independent of backend timing.
+      if (typeof window.cipherSwitchView === "function") window.cipherSwitchView("network");
+
       let res;
       if (currentFile) {
         const formData = new FormData();
@@ -4533,22 +4585,13 @@ document
         formData.append("mode", importMode);
         const headers = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
-        res = await fetch(`/api/cases/${window.CipherCaseState?.id || 1}/import-csv`, {
-          method: "POST",
-          headers,
-          body: formData
-        });
+        res = await fetch(importEndpoint, { method: "POST", headers, body: formData });
       } else {
         const headers = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
-        res = await fetch(`/api/cases/${window.CipherCaseState?.id || 1}/import-csv`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            filename: currentFilename,
-            csvText: currentCsvText,
-            mode: importMode
-          })
+        res = await fetch(importEndpoint, {
+          method: "POST", headers,
+          body: JSON.stringify({ filename: currentFilename, csvText: currentCsvText, mode: importMode })
         });
       }
 
@@ -4559,7 +4602,76 @@ document
         data = { detail: "Server error parsing JSON response" };
       }
 
-      if (res && res.ok && data.status === "success") {
+      // Master CSVs are imported synchronously into the normalized backend schema.
+      // Keep the local graph/timeline preview visible immediately as well, because
+      // verified-only Network/Timeline APIs intentionally do not expose pending rows.
+      if (res && res.ok && csvLooksLikeMaster && data.status === "success") {
+        const localGraph = buildLocalCsvGraph(currentCsvText);
+        if (localGraph) {
+          window.CipherLocalGraphData = localGraph;
+          window.CipherLocalTimelineData = buildLocalCsvTimeline(currentCsvText);
+          window.CipherLocalTimelineCaseId = caseId;
+          if (typeof window.cipherSwitchView === "function") window.cipherSwitchView("network");
+          else document.querySelector('.workspace-sidebar .side-item[data-view="network"]')?.click();
+          setTimeout(async () => {
+            if (typeof window.loadNetworkGraph === "function") await window.loadNetworkGraph(caseId);
+            if (typeof window.renderDynamicTimeline === "function") await window.renderDynamicTimeline();
+          }, 180);
+          closeCsvModal();
+          const imported = data.import || {};
+          const nodeCount = Number(imported.nodes || 0);
+          const relCount = Number(imported.relationships || 0);
+          syncFileToEvidenceSection(currentFilename, nodeCount || localGraph.nodes.length, 0, true);
+          if (status) {
+            status.classList.add("has-file");
+            status.innerHTML = `<span class="status-dot" style="background:#d9ff55;"></span><div><b style="color:#d9ff55;">MASTER CSV: ${escapeHtml(currentFilename)}</b><small>${nodeCount || localGraph.nodes.length} nodes · ${relCount || localGraph.edges.length} links · imported to case</small></div>`;
+          }
+          if (typeof showNetworkToast === "function") showNetworkToast(`✓ Master CSV imported: ${nodeCount || localGraph.nodes.length} nodes · ${relCount || localGraph.edges.length} links. Network + timeline preview loaded.`);
+        } else {
+          throw new Error("Master CSV imported, but no graph-shaped rows could be detected for the network preview.");
+        }
+      } else if (res && res.ok && data.status === "queued") {
+        const localGraph = buildLocalCsvGraph(currentCsvText);
+        if (localGraph) {
+          window.CipherLocalGraphData = localGraph;
+          window.CipherLocalTimelineData = buildLocalCsvTimeline(currentCsvText);
+          window.CipherLocalTimelineCaseId = window.CipherCaseState?.id || 1;
+          if (typeof window.cipherSwitchView === "function") {
+            window.cipherSwitchView("network");
+          } else {
+            document.querySelector('.workspace-sidebar .side-item[data-view="network"]')?.click();
+          }
+          setTimeout(async () => {
+            if (typeof window.loadNetworkGraph === "function") await window.loadNetworkGraph(window.CipherCaseState?.id || 1);
+            if (typeof window.renderDynamicTimeline === "function") await window.renderDynamicTimeline();
+          }, 180);
+          closeCsvModal();
+          syncFileToEvidenceSection(currentFilename, localGraph.rowCount, 0, false);
+          if (status) {
+            status.classList.add("has-file");
+            status.innerHTML = `
+              <span class="status-dot" style="background:#d9ff55;"></span>
+              <div>
+                <b style="color:#d9ff55;">CSV PREVIEW: ${escapeHtml(currentFilename)}</b>
+                <small>${localGraph.nodes.length} nodes · ${localGraph.edges.length} links · pending verification</small>
+              </div>
+            `;
+          }
+          if (typeof showNetworkToast === "function") {
+            showNetworkToast(`✓ CSV graph preview rendered: ${localGraph.nodes.length} nodes · ${localGraph.edges.length} links. Evidence remains pending verification.`);
+          }
+        } else {
+          throw new Error("CSV was received, but no graph-shaped rows could be detected.");
+        }
+      } else if (res && res.ok && data.status === "success") {
+        // Some backend deployments finish ordinary CSV imports synchronously.
+        // Keep the exact uploaded CSV preview authoritative until the graph data
+        // is demonstrably from this same upload. Never jump back to stale data.
+        window.CipherLocalGraphData = localCsvGraph;
+        window.CipherLocalTimelineData = localCsvTimeline;
+        window.CipherLocalTimelineCaseId = caseId;
+        if (typeof window.loadNetworkGraph === "function") await window.loadNetworkGraph(caseId);
+        if (typeof window.renderDynamicTimeline === "function") await window.renderDynamicTimeline();
         closeCsvModal();
 
         const successMsg = data.message || `Ingestion complete: ${data.stats?.importedEntities || 0} entities & ${data.stats?.importedRelationships || 0} links added (${importMode.toUpperCase()} mode).`;
@@ -4572,16 +4684,12 @@ document
         // Sync status into Evidence section register as INGESTED
         syncFileToEvidenceSection(currentFilename, data.stats?.importedEntities || 0, 0, true);
 
-        // Imported evidence creates PENDING findings. The investigator must review
-        // those findings before they become trusted Network/GIS data.
-        if (typeof window.cipherRefreshAllData === "function") {
-          await window.cipherRefreshAllData();
-        }
+        // Keep the investigator on Network after upload. The local CSV graph is
+        // deliberately shown as a PENDING PREVIEW until review promotes it.
+        // Previously this success branch immediately switched to Review, which
+        // made it look as though the CSV had processed but never plotted.
         if (typeof window.cipherSwitchView === "function") {
-          window.cipherSwitchView("review");
-        } else {
-          const reviewBtn = document.querySelector('.workspace-sidebar .side-item[data-view="review"]');
-          reviewBtn?.click();
+          window.cipherSwitchView("network");
         }
 
         // Run Cytoscape organic auto-layout so new nodes arrange cleanly
@@ -4995,6 +5103,9 @@ document
   ];
 
 
+  const getActiveTimelineCards = () => cards.filter(c => c.style.display !== "none");
+  const getTimelineDataset = () => (Array.isArray(window.CipherLocalTimelineData) && window.CipherLocalTimelineData.length) ? window.CipherLocalTimelineData : data;
+
   let visible = 0;
 
   let timer = null;
@@ -5036,18 +5147,24 @@ document
     index
   ) {
 
-    const d =
-      data[index - 1];
+    const timelineDataset = getTimelineDataset();
+    const d = timelineDataset[index - 1];
 
 
     if (!d)
       return;
+    const displayDate = d.date || (d.event_time ? new Date(d.event_time).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"}).toUpperCase() : "DATE UNKNOWN");
+    const displayKind = d.kind || d.event_type || "EVENT";
+    const displayTitle = d.title || d.description || "Investigation event";
+    const displaySummary = d.summary || d.description || "CSV evidence event pending verification.";
+    const displayMeta = d.meta || (d.verification_status || "PENDING REVIEW");
+    const displayTags = Array.isArray(d.tags) ? d.tags : [displayKind, displayMeta];
 
 
     if (title) {
 
       title.textContent =
-        d.title;
+        displayTitle;
 
     }
 
@@ -5064,13 +5181,13 @@ document
             EVENT
             ${String(index).padStart(2, "0")}
             /
-            ${esc(d.kind)}
+            ${esc(displayKind)}
           </span>
 
         </div>
 
         <div class="timeline-inspector-date">
-          ${esc(d.date)}
+          ${esc(displayDate)}
         </div>
 
         <div class="timeline-inspector-section">
@@ -5080,11 +5197,11 @@ document
           </span>
 
           <h3>
-            ${esc(d.title)}
+            ${esc(displayTitle)}
           </h3>
 
           <p>
-            ${esc(d.summary)}
+            ${esc(displaySummary)}
           </p>
 
         </div>
@@ -5097,7 +5214,7 @@ document
 
           <div class="timeline-inspector-tags">
 
-            ${d.tags
+            ${displayTags
               .map(
                 t =>
                   `<b>${esc(t)}</b>`
@@ -5115,7 +5232,7 @@ document
           </span>
 
           <strong>
-            ${esc(d.meta)}
+            ${esc(displayMeta)}
           </strong>
 
         </div>
@@ -5147,12 +5264,13 @@ document
 
     if (seqLabel) {
 
+      const total = getActiveTimelineCards().length || getTimelineDataset().length || 0;
       seqLabel.textContent =
         String(n).padStart(
           2,
           "0"
         ) +
-        " / 08";
+        " / " + String(total).padStart(2,"0");
 
     }
 
@@ -5206,7 +5324,7 @@ document
                 2,
                 "0"
               ) +
-              " / 08";
+              " / " + String(getActiveTimelineCards().length || getTimelineDataset().length || 0).padStart(2,"0");
 
     }
 
@@ -5215,164 +5333,59 @@ document
 
   function placeDefaults() {
 
-    const w =
-      stage.clientWidth;
+    // Fixed 4-column presentation grid. The grid always uses four equal columns
+    // and grows only downward, so the stage can scroll vertically without ever
+    // creating horizontal overflow. Every active event gets a visible slot.
+    const w = Math.max(320, stage.clientWidth || 320);
+    const columns = 4;
+    const gapX = 18;
+    const gapY = 24;
+    const padX = 20;
+    const padTop = 72;
+    const padBottom = 58;
+    const available = Math.max(280, w - padX * 2 - gapX * (columns - 1));
+    const cardW = Math.floor(available / columns);
+    const cardH = 184;
+    const rowH = cardH + gapY;
+    const activeCards = getActiveTimelineCards();
+    const rows = Math.max(1, Math.ceil(activeCards.length / columns));
+    const neededH = padTop + rows * rowH - gapY + padBottom;
 
-    const h =
-      stage.clientHeight;
+    stage.style.setProperty('width', '100%', 'important');
+    stage.style.setProperty('min-width', '0', 'important');
+    stage.style.setProperty('max-width', '100%', 'important');
+    stage.style.setProperty('height', Math.max(520, neededH) + 'px', 'important');
+    stage.style.setProperty('min-height', Math.max(520, neededH) + 'px', 'important');
+    stage.style.setProperty('overflow', 'visible', 'important');
 
+    activeCards.forEach((card, i) => {
+      const row = Math.floor(i / columns);
+      const col = i % columns;
+      const x = padX + col * (cardW + gapX);
+      const y = padTop + row * rowH;
 
-    const insetX =
-      w * 0.07;
-
-    const insetY =
-      h * 0.11;
-
-    const insetBottom =
-      h * 0.12;
-
-    const gap = 18;
-
-
-    const gridW =
-      w -
-      insetX * 2;
-
-
-    const gridH =
-      h -
-      insetY -
-      insetBottom;
-
-
-    const cellW =
-      (
-        gridW -
-        gap * 3
-      ) / 4;
-
-
-    const cellH =
-      (
-        gridH -
-        gap * 3
-      ) / 4;
-
-
-    cards.forEach(
-      (card, i) => {
-
-        const row =
-          Math.floor(
-            i / 4
-          );
-
-
-        const col =
-          row === 0
-            ? i
-            : 3 -
-              (i - 4);
-
-
-        const cx =
-          insetX +
-          col *
-            (
-              cellW +
-              gap
-            ) +
-          cellW / 2;
-
-
-        const cy =
-          insetY +
-          row *
-            (
-              cellH +
-              gap
-            ) +
-          cellH / 2;
-
-
-        const x =
-          Math.round(
-            cx -
-            card.offsetWidth /
-              2
-          );
-
-
-        const y =
-          Math.round(
-            cy -
-            card.offsetHeight /
-              2
-          );
-
-
-        card.style.setProperty(
-          "left",
-          Math.max(
-            8,
-            Math.min(
-              w -
-                card.offsetWidth -
-                8,
-              x
-            )
-          ) +
-            "px",
-          "important"
-        );
-
-
-        card.style.setProperty(
-          "top",
-          Math.max(
-            32,
-            Math.min(
-              h -
-                card.offsetHeight -
-                18,
-              y
-            )
-          ) +
-            "px",
-          "important"
-        );
-
-
-        card.style.right =
-          "auto";
-
-        card.style.bottom =
-          "auto";
-
-
-        card.style.setProperty(
-          "--snake-row",
-          row
-        );
-
-
-        card.style.setProperty(
-          "--snake-col",
-          col
-        );
-
-      }
-    );
+      card.classList.add('te-dynamic');
+      card.style.setProperty('left', Math.max(0, x) + 'px', 'important');
+      card.style.setProperty('top', y + 'px', 'important');
+      card.style.setProperty('width', cardW + 'px', 'important');
+      card.style.setProperty('height', cardH + 'px', 'important');
+      card.style.setProperty('min-height', cardH + 'px', 'important');
+      card.style.setProperty('max-width', cardW + 'px', 'important');
+      card.style.setProperty('right', 'auto', 'important');
+      card.style.setProperty('bottom', 'auto', 'important');
+      card.style.setProperty('margin', '0', 'important');
+      card.style.setProperty('--timeline-row', row);
+      card.style.setProperty('--timeline-col', col);
+    });
 
   }
-
 
   function cursorPoint(
     index
   ) {
 
-    const card =
-      cards[index - 1];
+    const activeCards = getActiveTimelineCards();
+    const card = activeCards[index - 1];
 
 
     if (!card || !cursor)
@@ -5522,10 +5535,11 @@ document
     paths = [];
 
 
+    const activeCards = getActiveTimelineCards();
     for (
       let i = 0;
       i <
-      cards.length - 1;
+      activeCards.length - 1;
       i++
     ) {
 
@@ -5710,7 +5724,7 @@ document
       0;
 
 
-    cards.forEach(
+    getActiveTimelineCards().forEach(
       c => {
 
         c.classList.add(
@@ -5763,15 +5777,16 @@ document
 
   function revealNext() {
 
+    const activeCards = getActiveTimelineCards();
     if (
       !sequenceRunning ||
       visible >=
-        cards.length
+        activeCards.length
     ) {
 
       if (
         visible >=
-        cards.length
+        activeCards.length
       ) {
 
         sequenceRunning =
@@ -5781,7 +5796,7 @@ document
           true;
 
         setProgress(
-          8,
+          activeCards.length,
           "TRACE COMPLETE"
         );
 
@@ -5814,7 +5829,7 @@ document
 
 
     const card =
-      cards[
+      activeCards[
         visible - 1
       ];
 
@@ -5862,7 +5877,7 @@ document
 
     if (
       visible <
-      cards.length
+      activeCards.length
     ) {
 
       timer =
@@ -5912,7 +5927,7 @@ document
       0;
 
 
-    cards.forEach(
+    getActiveTimelineCards().forEach(
       c => {
 
         c.classList.add(
@@ -6067,6 +6082,10 @@ document
     card,
     e
   ) {
+
+    // Dynamic CSV timeline cards are a fixed 4-column presentation grid.
+    // They must not be manually dragged out of their equal-spacing layout.
+    if (card.classList.contains("te-dynamic")) return;
 
     if (
       !sequenceComplete ||
@@ -6464,7 +6483,7 @@ document
       ) {
 
         showNetworkToast(
-          "Timeline cards returned to the fixed 4 × 4 snake pattern."
+          "Timeline layout reset."
         );
 
       }
@@ -6547,6 +6566,11 @@ document
 
     }
   );
+
+
+  // Runtime CSV timeline hook: reflow the physical cards after fresh events arrive.
+  window.CipherTimelineRefreshLayout = placeDefaults;
+  window.CipherTimelineDrawPaths = drawPaths;
 
 })();
 
@@ -6740,6 +6764,24 @@ document
         svg: `<svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`
       };
     }
+    if (t.includes("waypoint") || t.includes("pin") || t.includes("marker")) {
+      return {
+        type: "waypoint",
+        badge: "WAYPOINT",
+        color: "#d9ff55",
+        glow: "rgba(217, 255, 85, 0.55)",
+        svg: `<svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11A7 7 0 0 0 5 10c0 4.8 7 11 7 11z"></path><circle cx="12" cy="10" r="2.3"></circle></svg>`
+      };
+    }
+    if (t.includes("waypoint") || t.includes("pin") || t.includes("marker")) {
+      return {
+        type: "waypoint",
+        badge: "WAYPOINT",
+        color: "#d9ff55",
+        glow: "rgba(217, 255, 85, 0.55)",
+        svg: `<svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11A7 7 0 0 0 5 10c0 4.8 7 11 7 11z"></path><circle cx="12" cy="10" r="2.3"></circle></svg>`
+      };
+    }
     if (t.includes("place") || t.includes("location") || t.includes("vault") || t.includes("terminal") || t.includes("hub") || t.includes("site") || t.includes("safe_house") || t.includes("dock") || t.includes("incident") || t.includes("residence")) {
       return {
         type: "place",
@@ -6820,9 +6862,9 @@ document
           </div>
         </div>
       `,
-      iconSize: [42, 54],
-      iconAnchor: [21, 27],
-      popupAnchor: [0, -28]
+      iconSize: [42, 62],
+      iconAnchor: [21, 32],
+      popupAnchor: [0, -34]
     });
   }
 
@@ -7510,9 +7552,6 @@ document
   const filterButtons = [
     { id: "gisFilterAll", filter: "all" },
     { id: "gisFilterPersons", filter: "person" },
-    { id: "gisFilterVehicles", filter: "vehicle" },
-    { id: "gisFilterPlaces", filter: "place" },
-    { id: "gisFilterComms", filter: "comms" }
   ];
 
   filterButtons.forEach(fb => {
@@ -7860,12 +7899,6 @@ document
     );
 
 
-  const summaryBtn =
-    document.getElementById(
-      "reportCaseSummaryBtn"
-    );
-
-
   const toast =
     window.showNetworkToast;
 
@@ -8064,25 +8097,6 @@ document
   document
     .getElementById("reportAddEvidenceInline")
     ?.addEventListener("click", addEvidence);
-
-
-  summaryBtn?.addEventListener(
-    "click",
-    () => {
-
-      if (
-        typeof toast ===
-        "function"
-      ) {
-
-        toast(
-          "Case Summary is reserved for the next report module. The case sheet is ready for its data."
-        );
-
-      }
-
-    }
-  );
 
 
   async function printPdf() {
@@ -8480,13 +8494,13 @@ document
             <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="${ringGlow}" />
           </filter>
           <filter id="card-shadow" x="-10%" y="-10%" width="120%" height="120%">
-            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="rgba(0,0,0,0.65)" />
+            <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="rgba(0,0,0,0.45)" />
           </filter>
         </defs>
 
         <!-- Lower Information Card -->
         <g filter="url(#card-shadow)">
-          <rect x="8" y="38" width="188" height="48" rx="7" ry="7" fill="#090d14" stroke="${cardBorder}" stroke-width="1.6" />
+          <rect x="8" y="38" width="188" height="48" rx="7" ry="7" fill="#080b0d" fill-opacity="0.16" stroke="${cardBorder}" stroke-width="1.6" />
         </g>
 
         <!-- Primary Name Label -->
@@ -8495,15 +8509,13 @@ document
         </text>
 
         <!-- Subtitle Role Capsule -->
-        <rect x="22" y="62.5" width="160" height="17" rx="4" fill="#05080c" stroke="${pillBorder}" stroke-width="1" />
+        <rect x="22" y="62.5" width="160" height="17" rx="4" fill="#080b0d" fill-opacity="0.10" stroke="${pillBorder}" stroke-width="1" />
         <text x="102" y="74.5" text-anchor="middle" fill="${pillText}" font-family="'DM Mono', monospace" font-weight="600" font-size="8.5" letter-spacing="0.3">
           ${escapeXml(displayRole)}
         </text>
 
         <!-- Circular Avatar Header -->
-        <g filter="url(#avatar-glow)">
-          <circle cx="102" cy="24" r="17" fill="#0c121a" stroke="${ringColor}" stroke-width="2.2" />
-        </g>
+        <circle cx="102" cy="24" r="17" fill="#080b0d" fill-opacity="0.14" stroke="${ringColor}" stroke-width="2.2" />
 
         <!-- Category Icon -->
         <g color="${ringColor}">
@@ -8596,28 +8608,353 @@ document
     }, animate ? 700 : 50);
   }
 
-  // Force-directed layout with collision prevention
-  function applyOrganicForceLayout(cyInstance) {
+  // CIPHER / OBSIDIAN-STYLE CONTINUOUS GRAPH PHYSICS
+  // -------------------------------------------------
+  // The native Obsidian graph is a continuously relaxed force-directed web:
+  // nodes repel, links behave like springs, the graph has a soft center force,
+  // and node size follows connectivity.  This engine keeps those principles,
+  // but tunes them for CIPHER's much smaller investigative graphs.
+  let activeForceRaf = 0;
+  let activeForceToken = 0;
+
+  function stopOrganicForceLayout() {
+    activeForceToken += 1;
+    if (activeForceRaf) cancelAnimationFrame(activeForceRaf);
+    activeForceRaf = 0;
+  }
+
+  function applyOrganicForceLayout(cyInstance, options = {}) {
+    // Legacy Network mode: intentionally static; no continuous force animation.
+    if (cyInstance) {
+      stopOrganicForceLayout();
+      applyTieredHierarchyLayout(cyInstance, Boolean(options?.reseed));
+    }
+    return;
+  }
+
+  function __disabledOrganicForceLayout_UNUSED(cyInstance, options = {}) {
     if (!cyInstance) return;
     cyInstance.resize();
-    const layout = cyInstance.layout({
-      name: 'cose',
-      animate: true,
-      animationDuration: 750,
-      randomize: false,
-      componentSpacing: 180,
-      nodeRepulsion: function(node) { return 1500000; },
-      nodeOverlap: 0,
-      idealEdgeLength: function(edge) { return 230; },
-      edgeElasticity: function(edge) { return 45; },
-      nestingFactor: 5,
-      gravity: 30,
-      numIter: 1000
+    stopOrganicForceLayout();
+
+    const graphNodes = cyInstance.nodes().toArray();
+    const graphEdges = cyInstance.edges().toArray();
+    if (!graphNodes.length) return;
+
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const token = ++activeForceToken;
+    const rect = container?.getBoundingClientRect?.() || { width: 900, height: 600 };
+    const width = Math.max(640, rect.width || 900);
+    const height = Math.max(420, rect.height || 600);
+    const center = { x: 0, y: 0 };
+    const golden = Math.PI * (3 - Math.sqrt(5));
+
+    const hub = graphNodes.reduce((best, node) => {
+      if (!best) return node;
+      const bd = Number(best.data('degree') || 0);
+      const nd = Number(node.data('degree') || 0);
+      return nd > bd ? node : best;
+    }, null);
+    const hubId = hub ? String(hub.id()) : null;
+    const hubNeighbours = new Set();
+    hub?.connectedEdges().forEach(edge => {
+      const other = String(edge.source().id()) === hubId ? edge.target() : edge.source();
+      hubNeighbours.add(String(other.id()));
     });
-    layout.run();
-    setTimeout(() => {
-      cyInstance.fit(undefined, 40);
-    }, 800);
+
+    // Stable deterministic seed so the same investigation does not reshuffle
+    // wildly on every refresh, while still allowing the physics to breathe.
+    const seedFromGraph = graphNodes.reduce((sum, n, i) => {
+      const id = String(n.id());
+      let h = 2166136261;
+      for (let k = 0; k < id.length; k++) h = Math.imul(h ^ id.charCodeAt(k), 16777619);
+      return sum + Math.abs(h) * (i + 1);
+    }, 17);
+
+    const hasUsefulPositions = graphNodes.some(node => {
+      const pos = node.position();
+      return Number.isFinite(pos.x) && Number.isFinite(pos.y) && (Math.abs(pos.x) > 2 || Math.abs(pos.y) > 2);
+    });
+
+    if (!hasUsefulPositions || options.reseed) {
+      const baseRadius = Math.max(150, Math.min(245, Math.min(width, height) * 0.34));
+      graphNodes.forEach((node, index) => {
+        const id = String(node.id());
+        const degree = Number(node.data('degree') || 0);
+        if (id === hubId) {
+          node.position({ x: 0, y: 0 });
+          return;
+        }
+        const isCore = hubNeighbours.has(id);
+        const ring = isCore ? 0 : degree >= 2 ? 1 : 2;
+        const radius = ring === 0
+          ? baseRadius * (0.82 + (index % 3) * 0.055)
+          : ring === 1
+            ? baseRadius * (1.28 + (index % 4) * 0.075)
+            : baseRadius * (1.72 + (index % 5) * 0.07);
+        const angle = index * golden + (seedFromGraph % 997) * 0.00031;
+        node.position({
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius * (0.78 + (index % 3) * 0.035)
+        });
+      });
+      // Frame the freshly seeded graph once; physics then takes over without
+      // repeatedly zooming the investigator's viewport.
+      cyInstance.resize();
+      cyInstance.fit(undefined, 72);
+    }
+
+    const velocity = new Map(graphNodes.map(node => [String(node.id()), { x: 0, y: 0 }]));
+    const pinned = new Set(graphNodes.filter(n => n.data('_pinned') === true).map(n => String(n.id())));
+    let alpha = reduced ? 0.32 : 0.95;
+    let lastTime = performance.now();
+    let frame = 0;
+
+    // Forces are intentionally normalized for Cytoscape's world coordinates.
+    // These values are tuned around a 6–20px node scale rather than a generic
+    // graph-library default.
+    const linkDistance = (a, b) => {
+      const aHub = String(a.id()) === hubId;
+      const bHub = String(b.id()) === hubId;
+      if (aHub || bHub) return 156;
+      const da = Number(a.data('degree') || 0);
+      const db = Number(b.data('degree') || 0);
+      return 184 + Math.min(50, Math.abs(da - db) * 6);
+    };
+
+    const step = (now) => {
+      if (
+        token !== activeForceToken ||
+        !document.body.contains(container) ||
+        window.__cipherNetworkForceStopped ||
+        !cyInstance.container()
+      ) {
+        activeForceRaf = 0;
+        return;
+      }
+
+      frame++;
+      const dt = Math.min(1.55, Math.max(0.65, (now - lastTime) / 16.67));
+      lastTime = now;
+      const energy = Math.max(0.012, alpha);
+      const forces = new Map(graphNodes.map(node => [String(node.id()), { x: 0, y: 0 }]));
+
+      // 1) Many-body repulsion.  A distance cap keeps large graphs responsive.
+      for (let i = 0; i < graphNodes.length; i++) {
+        const a = graphNodes[i];
+        const ap = a.position();
+        const aSize = Number(a.data('nodeSize') || 8);
+        for (let j = i + 1; j < graphNodes.length; j++) {
+          const b = graphNodes[j];
+          const bp = b.position();
+          let dx = ap.x - bp.x;
+          let dy = ap.y - bp.y;
+          let dist2 = dx * dx + dy * dy;
+          if (dist2 < 0.16) {
+            dx = ((i + 1) * 0.73) - ((j + 1) * 0.19);
+            dy = ((j + 1) * 0.41) - ((i + 1) * 0.17);
+            dist2 = dx * dx + dy * dy;
+          }
+          if (dist2 > 235000) continue;
+          const dist = Math.sqrt(dist2);
+          const bSize = Number(b.data('nodeSize') || 8);
+          const minGap = (aSize + bSize) * 0.52 + 28;
+          const charge = 4200 / Math.max(1100, dist2);
+          const collision = dist < minGap ? ((minGap - dist) * 0.115) : 0;
+          const magnitude = charge + collision;
+          const ux = dx / dist;
+          const uy = dy / dist;
+          const fa = forces.get(String(a.id()));
+          const fb = forces.get(String(b.id()));
+          fa.x += ux * magnitude;
+          fa.y += uy * magnitude;
+          fb.x -= ux * magnitude;
+          fb.y -= uy * magnitude;
+        }
+      }
+
+      // 2) Relationship springs.  This is the part that makes the graph read
+      // as a web rather than as an orbit of unrelated dots.
+      graphEdges.forEach((edge, edgeIndex) => {
+        const a = edge.source();
+        const b = edge.target();
+        const ap = a.position();
+        const bp = b.position();
+        let dx = bp.x - ap.x;
+        let dy = bp.y - ap.y;
+        let dist = Math.hypot(dx, dy);
+        if (dist < 0.001) dist = 0.001;
+        const target = linkDistance(a, b);
+        const stretch = dist - target;
+        const springK = (String(a.id()) === hubId || String(b.id()) === hubId) ? 0.020 : 0.014;
+        const spring = Math.max(-8.5, Math.min(8.5, stretch * springK));
+        dx /= dist;
+        dy /= dist;
+        const fa = forces.get(String(a.id()));
+        const fb = forces.get(String(b.id()));
+        fa.x += dx * spring;
+        fa.y += dy * spring;
+        fb.x -= dx * spring;
+        fb.y -= dy * spring;
+
+        // Tiny phase offsets prevent perfect symmetry without making the graph jitter.
+        if (!reduced) {
+          const phase = edgeIndex * 1.47 + seedFromGraph * 0.0000002;
+          const micro = Math.sin(now * 0.00018 + phase) * 0.010;
+          fa.x += -dy * micro;
+          fa.y += dx * micro;
+          fb.x += dy * micro;
+          fb.y -= dx * micro;
+        }
+      });
+
+      // 3) Soft center gravity + low-frequency ambient breathing.
+      graphNodes.forEach((node, index) => {
+        const id = String(node.id());
+        if (pinned.has(id) || node.data('_pinned') === true || node.data('_draggingCluster') === true) return;
+        const p = node.position();
+        const f = forces.get(id);
+        const degree = Number(node.data('degree') || 0);
+        const centerStrength = 0.0022 + Math.min(0.0014, degree * 0.00018);
+        f.x += (center.x - p.x) * centerStrength;
+        f.y += (center.y - p.y) * centerStrength;
+        if (!reduced) {
+          const phase = index * 1.618 + seedFromGraph * 0.00000011;
+          const breathe = 0.025 + Math.min(0.035, degree * 0.004);
+          f.x += Math.cos(now * 0.00023 + phase) * breathe;
+          f.y += Math.sin(now * 0.00019 + phase * 0.71) * breathe;
+        }
+      });
+
+      // 4) Soft viewport containment. The graph may breathe, but it is never
+      // allowed to run beyond the visible network canvas.
+      const zoom = Math.max(0.05, Number(cyInstance.zoom()) || 1);
+      const pan = cyInstance.pan();
+      const leftBound = (-pan.x / zoom) + 62;
+      const topBound = (-pan.y / zoom) + 62;
+      const rightBound = ((width - pan.x) / zoom) - 62;
+      const bottomBound = ((height - pan.y) / zoom) - 62;
+      graphNodes.forEach((node) => {
+        const id = String(node.id());
+        if (pinned.has(id) || node.data('_pinned') === true || node.data('_draggingCluster') === true) return;
+        const p = node.position();
+        const f = forces.get(id);
+        const push = 0.075;
+        if (p.x < leftBound) f.x += (leftBound - p.x) * push;
+        else if (p.x > rightBound) f.x -= (p.x - rightBound) * push;
+        if (p.y < topBound) f.y += (topBound - p.y) * push;
+        else if (p.y > bottomBound) f.y -= (p.y - bottomBound) * push;
+      });
+
+      // 5) Semi-implicit Euler integration + damping. The graph settles into
+      // a calm state instead of endlessly drifting after the initial reveal.
+      graphNodes.forEach(node => {
+        const id = String(node.id());
+        if (pinned.has(id) || node.data('_pinned') === true || node.data('_draggingCluster') === true) return;
+        const v = velocity.get(id);
+        const f = forces.get(id);
+        const degree = Number(node.data('degree') || 0);
+        const mass = 1 + Math.min(1.8, degree * 0.10);
+        const acceleration = energy * 0.82;
+        const damping = reduced ? 0.78 : (settleFrames > 150 ? 0.935 : 0.89);
+        v.x = (v.x + (f.x / mass) * acceleration) * damping;
+        v.y = (v.y + (f.y / mass) * acceleration) * damping;
+
+        const speed = Math.hypot(v.x, v.y);
+        const maxSpeed = (reduced ? 2.2 : (settleFrames > 150 ? 1.15 : 4.3)) * Math.max(0.55, energy);
+        if (speed > maxSpeed) {
+          v.x = (v.x / speed) * maxSpeed;
+          v.y = (v.y / speed) * maxSpeed;
+        }
+        const pos = node.position();
+        let nx = pos.x + v.x * dt;
+        let ny = pos.y + v.y * dt;
+        // Hard safety clamp after the soft boundary force. This is the final
+        // guard against a node escaping the viewport during a large frame.
+        nx = Math.max(leftBound, Math.min(rightBound, nx));
+        ny = Math.max(topBound, Math.min(bottomBound, ny));
+        node.position({ x: nx, y: ny });
+      });
+
+      // Hub is centered softly, never hard-locked. This preserves the feeling
+      // that the network is breathing around its most connected source.
+      if (hub && !pinned.has(hubId)) {
+        const hp = hub.position();
+        const ease = 0.026 * Math.max(0.55, energy);
+        hub.position({ x: hp.x + (center.x - hp.x) * ease, y: hp.y + (center.y - hp.y) * ease });
+      }
+
+      settleFrames++;
+      alpha = Math.max(0.012, alpha * (reduced ? 0.88 : 0.965));
+      activeForceRaf = requestAnimationFrame(step);
+    };
+
+    activeForceRaf = requestAnimationFrame(step);
+  }
+
+  const positionStorageKey = (caseId) => `cipher-network-positions-v3-${caseId}`;
+
+  function restoreSavedPositions(cyInstance, caseId) {
+    if (!cyInstance) return 0;
+    try {
+      const raw = localStorage.getItem(positionStorageKey(caseId));
+      if (!raw) return 0;
+      const saved = JSON.parse(raw);
+      let restored = 0;
+      cyInstance.nodes().forEach(node => {
+        const pos = saved[String(node.id())];
+        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+          node.position({ x: pos.x, y: pos.y });
+          restored++;
+        }
+      });
+      return restored;
+    } catch (err) {
+      console.warn('Could not restore network positions:', err);
+      return 0;
+    }
+  }
+
+  function saveNetworkPositions(cyInstance, caseId) {
+    if (!cyInstance) return;
+    try {
+      const positions = {};
+      cyInstance.nodes().forEach(node => {
+        const p = node.position();
+        positions[String(node.id())] = { x: Number(p.x), y: Number(p.y) };
+      });
+      localStorage.setItem(positionStorageKey(caseId), JSON.stringify(positions));
+    } catch (err) {
+      console.warn('Could not save network positions:', err);
+    }
+  }
+
+  function graphNodeClass(type) {
+    const t = String(type || '').toLowerCase();
+    if (t.includes('person') || t.includes('suspect') || t.includes('kingpin') || t.includes('driver')) return 'node-person';
+    if (t.includes('organis') || t.includes('company') || t.includes('business')) return 'node-org';
+    if (t.includes('phone') || t.includes('msisdn') || t.includes('mobile')) return 'node-phone';
+    if (t.includes('account') || t.includes('financial') || t.includes('bank')) return 'node-finance';
+    if (t.includes('vehicle') || t.includes('car')) return 'node-vehicle';
+    if (t.includes('place') || t.includes('location') || t.includes('vault') || t.includes('terminal')) return 'node-place';
+    return 'node-evidence';
+  }
+
+  function nodeRadiusFor(data, degree, isHub = false, isCoreNeighbor = false) {
+    const type = String(data?.type || '').toLowerCase();
+    const isPerson = type.includes('person') || type.includes('suspect') || type.includes('kingpin');
+    // Obsidian-like hierarchy: the most connected source is only a little larger
+    // than its immediate neighbours; satellites collapse into small points.
+    if (isHub) return isPerson ? 8.4 : 8.0;
+    if (isCoreNeighbor) return isPerson ? 6.2 : 5.8;
+    if (degree >= 4) return isPerson ? 5.6 : 5.2;
+    if (degree >= 2) return isPerson ? 4.8 : 4.5;
+    return isPerson ? 3.7 : 3.4;
+  }
+
+  function createFlowLayer(cyInstance) {
+    // Disabled in legacy static mode.
+    return null;
   }
 
   async function loadNetworkGraph(caseId = 1) {
@@ -8628,19 +8965,44 @@ document
       const headers = { "Accept": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/cases/${caseId}/graph`, { headers });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch graph data`);
-
-      const text = await res.text();
-      let graphData;
+      let graphData = null;
       try {
-        graphData = JSON.parse(text);
-      } catch (parseErr) {
-        throw new Error("Server returned non-JSON payload: " + text.slice(0, 80));
+        const res = await fetch(`/api/cases/${caseId}/graph`, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to fetch graph data`);
+        const text = await res.text();
+        try {
+          graphData = JSON.parse(text);
+        } catch (parseErr) {
+          throw new Error("Server returned non-JSON payload: " + text.slice(0, 80));
+        }
+      } catch (apiErr) {
+        // A queued CSV must still be visible even if the verified graph endpoint
+        // is temporarily unavailable. The local preview is explicitly pending.
+        if (window.CipherLocalGraphData?.pending && Array.isArray(window.CipherLocalGraphData.nodes)) {
+          graphData = window.CipherLocalGraphData;
+        } else {
+          throw apiErr;
+        }
       }
 
-      const rawNodes = Array.isArray(graphData.nodes) ? graphData.nodes : [];
-      const rawEdges = Array.isArray(graphData.edges) ? graphData.edges : (Array.isArray(graphData.relationships) ? graphData.relationships : []);
+      let rawNodes = Array.isArray(graphData.nodes) ? graphData.nodes : [];
+      let rawEdges = Array.isArray(graphData.edges) ? graphData.edges : (Array.isArray(graphData.relationships) ? graphData.relationships : []);
+
+      // CSV uploads are intentionally queued by the backend until investigator
+      // review. If the verified graph is therefore empty, use the local CSV
+      // preview created by the upload flow so the relationship map is visible
+      // immediately. This never marks the preview as verified.
+      let isCsvPreview = false;
+      const localGraph = window.CipherLocalGraphData;
+      // A freshly uploaded CSV must own the visible graph until its own backend
+      // data is verified. Do NOT let an older/default backend graph overwrite the
+      // freshly parsed CSV preview merely because the backend already contains
+      // unrelated nodes for the active case.
+      if (localGraph?.pending && Array.isArray(localGraph.nodes) && localGraph.nodes.length) {
+        rawNodes = localGraph.nodes;
+        rawEdges = Array.isArray(localGraph.edges) ? localGraph.edges : [];
+        isCsvPreview = true;
+      }
 
       // Pre-calculate node degree (in + out connections)
       const degreeMap = {};
@@ -8662,22 +9024,48 @@ document
       });
 
       if (statsEl) {
-        const store = graphData.graph_store ? ` · ${String(graphData.graph_store).toUpperCase()}` : '';
+        const store = isCsvPreview ? ' · CSV PREVIEW / PENDING REVIEW' : (graphData.graph_store ? ` · ${String(graphData.graph_store).toUpperCase()}` : '');
         statsEl.textContent = `${window.CipherCaseState?.caseNumber || "ACTIVE CASE"} · ${normalizedNodes.length} NODES · ${validEdges.length} LINKS${store}`;
       }
+      if (isCsvPreview && typeof showNetworkToast === "function") {
+        showNetworkToast(`CSV preview active: ${normalizedNodes.length} nodes · ${validEdges.length} links. Review/accept the evidence to make it part of the verified graph.`);
+      }
 
-      // Prepare nodes with custom vector cards
+      // Prepare compact Obsidian-like nodes. The highest-degree entity becomes
+      // the visual source/hub and its direct neighbours get a subtle secondary size.
+      const primaryNode = normalizedNodes.reduce((best, n) => {
+        if (!best) return n;
+        return (degreeMap[String(n.id)] || 0) > (degreeMap[String(best.id)] || 0) ? n : best;
+      }, null);
+      const primaryId = primaryNode ? String(primaryNode.id) : null;
+      const primaryNeighbourIds = new Set();
+      validEdges.forEach(e => {
+        const s = String(e.source), t = String(e.target);
+        if (s === primaryId) primaryNeighbourIds.add(t);
+        if (t === primaryId) primaryNeighbourIds.add(s);
+      });
+
       const nodes = normalizedNodes.map(n => {
         const id = String(n.id);
         const deg = degreeMap[id] || 0;
-        const svgUri = buildTacticalNodeSvg(n, deg);
+        const isHub = id === primaryId;
+        const isCoreNeighbor = primaryNeighbourIds.has(id);
+        const classes = [graphNodeClass(n.type)];
+        if (isCsvPreview) classes.push('csv-preview-node');
+        if (isHub) classes.push('network-hub');
+        if (isCoreNeighbor) classes.push('network-core-neighbor');
         return {
           data: {
             ...n,
             id: id,
             degree: deg,
-            svgUri: svgUri
-          }
+            nodeSize: nodeRadiusFor(n, deg, isHub, isCoreNeighbor) * 2,
+            nodeImage: buildTacticalNodeSvg(n, deg),
+            displayLabel: '',
+            labelOpacity: 0,
+            isPrimarySource: isHub ? 'true' : 'false'
+          },
+          classes: classes.join(' ')
         };
       });
 
@@ -8704,6 +9092,7 @@ document
       const elements = [...nodes, ...edges];
 
       if (cy) {
+        stopOrganicForceLayout();
         cy.destroy();
       }
 
@@ -8711,7 +9100,11 @@ document
         container: container,
         elements: elements,
         boxSelectionEnabled: false,
-        wheelSensitivity: 0.25,
+        wheelSensitivity: 0.22,
+        motionBlur: false,
+        motionBlurOpacity: 0,
+        textureOnViewport: false,
+        hideEdgesOnViewport: false,
         style: [
           {
             selector: 'node',
@@ -8719,20 +9112,51 @@ document
               'shape': 'rectangle',
               'width': 204,
               'height': 92,
-              'background-color': 'transparent',
-              'background-image': 'data(svgUri)',
+              'background-image': 'data(nodeImage)',
               'background-fit': 'contain',
-              'background-clip': 'none',
+              'background-opacity': 0,
+              'background-color': 'transparent',
+              'background-fill': 'solid',
+              'overlay-opacity': 0,
+              'underlay-opacity': 0,
               'border-width': 0,
-              'label': '', // Rendered inside vector SVG
-              'transition-duration': '0.2s',
+              'border-opacity': 0,
+              'shadow-opacity': 0,
+              'shadow-blur': 0,
+              'shadow-color': 'transparent',
+              'shadow-offset-x': 0,
+              'shadow-offset-y': 0,
+              'label': 'data(displayLabel)',
+              'font-family': 'DM Mono, monospace',
+              'font-size': 8,
+              'font-weight': 500,
+              'color': '#dfe9e2',
+              'text-opacity': 'data(labelOpacity)',
+              'text-outline-color': '#020503',
+              'text-outline-width': 2,
+              'text-margin-y': -10,
+              'text-max-width': 170,
+              'text-wrap': 'ellipsis',
+              'min-zoomed-font-size': 7,
+              'overlay-opacity': 0,
+              'transition-property': 'shadow-blur, shadow-color, shadow-opacity, opacity, background-color, border-color, border-width',
+              'transition-duration': '0.28s',
               'cursor': 'pointer'
             }
           },
+          { selector: 'node.node-person', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
+          { selector: 'node.network-hub', style: { 'width': 204, 'height': 92, 'border-width': 0, 'shadow-opacity': 0, 'font-size': 0, 'z-index': 20 } },
+          { selector: 'node.network-core-neighbor', style: { 'border-width': 0, 'shadow-opacity': 0, 'font-size': 0 } },
+          { selector: 'node.node-org', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
+          { selector: 'node.node-phone', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
+          { selector: 'node.node-finance', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
+          { selector: 'node.node-vehicle', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
+          { selector: 'node.node-place', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
+          { selector: 'node.node-evidence', style: { 'background-color': 'transparent', 'background-opacity': 0, 'border-color': 'transparent', 'shadow-color': 'transparent', 'shadow-blur': 0, 'shadow-opacity': 0 } },
           {
             selector: 'edge',
             style: {
-              'label': 'data(label)',
+              'label': '',
               'color': '#f1f5f9',
               'font-size': '10px',
               'font-family': 'DM Mono, monospace',
@@ -8745,22 +9169,30 @@ document
               'text-border-color': '#2a3f55',
               'text-border-width': 1,
               'text-border-opacity': 1,
-              'line-color': '#334e68',
+              'line-color': 'rgba(173,214,176,.22)',
               'curve-style': 'bezier',
-              'target-arrow-shape': 'triangle',
-              'target-arrow-color': '#334e68',
-              'arrow-scale': 1.25,
-              'width': 3.2,
+              'target-arrow-shape': 'none',
+              'target-arrow-color': 'transparent',
+              'arrow-scale': 0,
+              'width': 0.82,
               'min-zoomed-font-size': 8,
-              'transition-property': 'line-color, target-arrow-color, width, opacity',
+              'text-opacity': 0,
+              'transition-property': 'line-color, width, opacity',
               'transition-duration': '0.2s'
+            }
+          },
+          {
+            selector: 'edge.highlighted-edge',
+            style: {
+              'label': 'data(displayLabel)',
+              'text-opacity': 1
             }
           },
           {
             selector: 'edge.alert-edge',
             style: {
               'line-color': '#f59e0b',
-              'target-arrow-color': '#f59e0b',
+              'target-arrow-color': 'transparent',
               'line-style': 'dashed',
               'line-dash-pattern': [6, 4],
               'text-border-color': '#d97706',
@@ -8769,39 +9201,99 @@ document
             }
           },
           {
+            selector: 'node.csv-preview-node',
+            style: {
+              'border-style': 'none',
+              'border-color': 'transparent',
+              'border-width': 0,
+              'border-opacity': 0,
+              'background-color': 'transparent',
+              'background-opacity': 0,
+              'overlay-opacity': 0,
+              'underlay-opacity': 0,
+              'shadow-opacity': 0
+            }
+          },
+          {
+            selector: 'node.csv-preview-node.network-hub',
+            style: {
+              'border-style': 'none',
+              'border-color': 'transparent',
+              'border-width': 0,
+              'border-opacity': 0,
+              'background-color': 'transparent',
+              'background-opacity': 0,
+              'overlay-opacity': 0,
+              'underlay-opacity': 0,
+              'shadow-opacity': 0
+            }
+          },
+          {
             selector: 'node:selected',
             style: {
+              'shadow-blur': 0,
+              'shadow-color': 'transparent',
+              'shadow-opacity': 0
             }
           },
           {
             selector: 'node.highlighted',
             style: {
+              'shadow-blur': 0,
+              'shadow-color': 'transparent',
+              'shadow-opacity': 0
             }
           },
           {
             selector: 'edge.highlighted-edge',
             style: {
-              'line-color': '#00e5ff',
-              'target-arrow-color': '#00e5ff',
-              'width': 4,
+              'label': 'data(displayLabel)',
+              'text-opacity': 1,
+              'line-color': '#d9ff55',
+              'target-arrow-color': 'transparent',
+              'width': 1.8,
+              'shadow-blur': 12,
+              'shadow-color': '#00e5ff'
             }
           },
           {
             selector: 'node.path-node',
             style: {
+              'shadow-blur': 0,
+              'shadow-color': 'transparent',
+              'shadow-opacity': 0
             }
           },
           {
             selector: 'edge.path-edge',
             style: {
               'line-color': '#fbbf24',
-              'target-arrow-color': '#fbbf24',
+              'target-arrow-color': 'transparent',
               'width': 4.5,
+              'shadow-blur': 14,
+              'shadow-color': '#fbbf24'
             }
           },
           {
             selector: 'node.pattern-alert',
             style: {
+              'shadow-blur': 0,
+              'shadow-color': 'transparent',
+              'shadow-opacity': 0
+            }
+          },
+          {
+            selector: '.hover-dimmed',
+            style: {
+              'opacity': 0.24,
+              'text-opacity': 0.12
+            }
+          },
+          {
+            selector: '.hover-connected',
+            style: {
+              'opacity': 1,
+              'shadow-opacity': 02
             }
           },
           {
@@ -8818,8 +9310,103 @@ document
         showNetworkToast('Verified nodes loaded, but no verified relationships are available yet. Accept relationship findings in Review to draw connections.');
       }
 
-      // Default to Tiered Hierarchy layout matching intelligence reference
-      applyTieredHierarchyLayout(cy, false);
+      // Legacy static node presentation: fixed tactical node cards with no
+      // continuous physics or animated connection layer.
+      stopOrganicForceLayout();
+      const restoredCount = restoreSavedPositions(cy, caseId);
+      if (restoredCount === 0) {
+        applyTieredHierarchyLayout(cy, false);
+      } else {
+        cy.resize();
+        cy.fit(undefined, 45);
+      }
+      // Dragging a node moves its connected cluster as a single investigation
+      // object. The grabbed node remains the anchor, while its whole component
+      // follows the pointer and then settles back into the force field.
+      let dragGroup = null;
+      let dragAnchor = null;
+      cy.on('grab', 'node', (evt) => {
+        const anchor = evt.target;
+        const seen = new Set([String(anchor.id())]);
+        const queue = [anchor];
+        const component = [];
+        while (queue.length) {
+          const current = queue.shift();
+          component.push(current);
+          current.connectedNodes().forEach(neighbor => {
+            const id = String(neighbor.id());
+            if (!seen.has(id)) { seen.add(id); queue.push(neighbor); }
+          });
+        }
+        dragGroup = component;
+        dragAnchor = { x: anchor.position('x'), y: anchor.position('y') };
+        dragGroup.forEach(node => { node.data('_draggingCluster', true); node.data('_pinned', true); });
+      });
+      cy.on('drag', 'node', (evt) => {
+        if (!dragGroup || !dragAnchor) return;
+        const anchor = evt.target;
+        const now = anchor.position();
+        let dx = now.x - dragAnchor.x;
+        let dy = now.y - dragAnchor.y;
+        if (!dx && !dy) return;
+
+        // Keep the whole connected component inside the current viewport while
+        // preserving the exact pointer-driven movement whenever there is room.
+        const zoom = Math.max(0.05, Number(cy.zoom()) || 1);
+        const pan = cy.pan();
+        const r = container.getBoundingClientRect();
+        const bounds = {
+          left: (-pan.x / zoom) + 62,
+          top: (-pan.y / zoom) + 62,
+          right: ((r.width - pan.x) / zoom) - 62,
+          bottom: ((r.height - pan.y) / zoom) - 62
+        };
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        dragGroup.forEach(node => {
+          const p = node.position();
+          minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        });
+        if (minX + dx < bounds.left) dx += bounds.left - (minX + dx);
+        if (maxX + dx > bounds.right) dx -= (maxX + dx) - bounds.right;
+        if (minY + dy < bounds.top) dy += bounds.top - (minY + dy);
+        if (maxY + dy > bounds.bottom) dy -= (maxY + dy) - bounds.bottom;
+
+        dragGroup.forEach(node => {
+          const p = node.position();
+          node.position({ x: p.x + dx, y: p.y + dy });
+        });
+        dragAnchor = { x: now.x + dx, y: now.y + dy };
+      });
+      cy.on('dragfree', 'node', (evt) => {
+        if (dragGroup) {
+          dragGroup.forEach(node => { node.removeData('_draggingCluster'); node.data('_pinned', true); });
+        }
+        saveNetworkPositions(cy, caseId);
+        dragGroup = null;
+        dragAnchor = null;
+      });
+      cy.on('layoutstop', () => saveNetworkPositions(cy, caseId));
+
+      cy.on('mouseover', 'node', (evt) => {
+        const node = evt.target;
+        if (!node.data('displayLabel')) node.data('displayLabel', node.data('label') || '');
+        node.data('labelOpacity', 1);
+        node.addClass('hovered');
+        cy.elements().removeClass('hover-connected hover-dimmed');
+        cy.elements().addClass('hover-dimmed');
+        node.removeClass('hover-dimmed').addClass('hover-connected');
+        node.connectedEdges().removeClass('hover-dimmed').addClass('hover-connected');
+        node.connectedEdges().connectedNodes().removeClass('hover-dimmed').addClass('hover-connected');
+      });
+      cy.on('mouseout', 'node', (evt) => {
+        const node = evt.target;
+        const isHub = node.hasClass('network-hub');
+        const degree = Number(node.data('degree') || 0);
+        node.data('labelOpacity', isHub || node.hasClass('network-core-neighbor') ? 0.92 : (degree >= 3 ? 0.72 : 0));
+        node.removeClass('hovered');
+        cy.elements().removeClass('hover-connected hover-dimmed');
+      });
 
       // Tap Node handler -> Inspector & GIS Pan
       cy.on('tap', 'node', (evt) => {
@@ -8965,6 +9552,7 @@ document
   hierarchicalBtn?.addEventListener("click", () => {
     if (cy) {
       applyTieredHierarchyLayout(cy, true);
+      setTimeout(() => saveNetworkPositions(cy, window.CipherCaseState?.id || 1), 800);
       if (typeof toast === "function") {
         toast("Tiered Intelligence Flow applied.");
       } else if (typeof showNetworkToast === "function") {
@@ -8978,6 +9566,7 @@ document
   autoLayoutBtn?.addEventListener("click", () => {
     if (cy) {
       applyOrganicForceLayout(cy);
+      setTimeout(() => saveNetworkPositions(cy, window.CipherCaseState?.id || 1), 900);
       if (typeof toast === "function") {
         toast("Organic force-directed layout recalculated.");
       } else if (typeof showNetworkToast === "function") {
@@ -9003,51 +9592,150 @@ document
   });
 
   // In-app Delete Confirmation & Execution (100% iframe-safe, no blocked native confirm/prompt)
+  // Resolve a graph node ID to the real relational entity ID.
+  // CSV/master imports often use external IDs such as P001/PH001 while the
+  // DELETE endpoint expects the numeric `entities.id`. The old code sent the
+  // external CSV ID directly and the backend quite correctly rejected it as
+  // an invalid entity ID.
+  const resolveBackendEntityId = async (entityId, nodeData = null) => {
+    const raw = String(entityId ?? "").trim();
+    if (!raw) return null;
+    // Normal backend graph nodes already carry a numeric entity ID.
+    if (/^\d+$/.test(raw)) return raw;
+
+    try {
+      const caseId = window.CipherCaseState?.id || 1;
+      const headers = (typeof window.getAuthHeaders === "function" ? window.getAuthHeaders() : {});
+      const res = await fetch(`/api/cases/${caseId}/entities`, { headers });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const entities = Array.isArray(data.entities) ? data.entities : [];
+      const wanted = raw.toLowerCase();
+      const label = String(nodeData?.label || "").trim().toLowerCase();
+      const match = entities.find(ent =>
+        String(ent.id) === raw ||
+        String(ent.external_id || "").trim().toLowerCase() === wanted ||
+        (label && String(ent.label || "").trim().toLowerCase() === label)
+      );
+      return match ? String(match.id) : null;
+    } catch (err) {
+      console.warn("Could not resolve CSV/external node ID to backend entity ID", err);
+      return null;
+    }
+  };
+
+  const removeFromLocalCsvGraph = (entityId, nodeData = null) => {
+    const local = window.CipherLocalGraphData;
+    if (!local || !Array.isArray(local.nodes)) return false;
+    const raw = String(entityId ?? "").trim();
+    const label = String(nodeData?.label || "").trim().toLowerCase();
+    const kept = local.nodes.filter(n => {
+      const id = String(n?.id ?? n?.data?.id ?? "").trim();
+      const nLabel = String(n?.label ?? n?.data?.label ?? "").trim().toLowerCase();
+      return id !== raw && (!label || nLabel !== label);
+    });
+    const removed = kept.length !== local.nodes.length;
+    if (!removed) return false;
+    const removedIds = new Set(local.nodes
+      .filter(n => {
+        const id = String(n?.id ?? n?.data?.id ?? "").trim();
+        const nLabel = String(n?.label ?? n?.data?.label ?? "").trim().toLowerCase();
+        return id === raw || (label && nLabel === label);
+      })
+      .map(n => String(n?.id ?? n?.data?.id ?? "")));
+    local.nodes = kept;
+    local.edges = (Array.isArray(local.edges) ? local.edges : []).filter(e =>
+      !removedIds.has(String(e?.source ?? e?.data?.source ?? "")) &&
+      !removedIds.has(String(e?.target ?? e?.data?.target ?? ""))
+    );
+    local.rowCount = local.nodes.length;
+    // A deletion is a user mutation of the live CSV preview. Do not let the
+    // next graph refresh resurrect the original uploaded CSV.
+    local.sourceFingerprint = `${local.sourceFingerprint || "csv"}|deleted:${raw}:${Date.now()}`;
+    window.CipherLocalGraphData = local;
+    return true;
+  };
+
   const executeDelete = async (entityId, entityLabel) => {
     try {
+      const nodeObj = cy ? cy.$(`node[id="${String(entityId).replace(/"/g, '\\"')}"]`) : null;
+      const nodeData = nodeObj && nodeObj.length ? nodeObj.data() : { label: entityLabel };
+      const isLocalPreview = Boolean(window.CipherLocalGraphData?.pending);
+
       if (typeof showNetworkToast === "function") {
-        showNetworkToast(`Permanently removing "${entityLabel}"...`);
+        showNetworkToast(`Removing "${entityLabel}"...`);
       } else if (typeof toast === "function") {
-        toast(`Permanently removing "${entityLabel}"...`);
+        toast(`Removing "${entityLabel}"...`);
       }
 
-      const res = await fetch(`/api/cases/${window.CipherCaseState?.id || 1}/entities/${entityId}`, {
-        method: "DELETE",
-        headers: (typeof window.getAuthHeaders === "function" ? window.getAuthHeaders() : {})
-      });
-
-      if (res.ok) {
+      // A pending CSV is a frontend preview, not a verified backend entity.
+      // ALWAYS mutate the preview locally first. Do not look up a same-named
+      // database entity here, otherwise deleting "Rahul" from a CSV preview
+      // could accidentally delete an unrelated verified Rahul from the case.
+      if (isLocalPreview) {
+        const removed = removeFromLocalCsvGraph(entityId, nodeData);
+        if (!removed) throw new Error("The selected CSV node could not be found in the active preview.");
         if (cy) {
-          const el = cy.$(`node[id="${entityId}"]`);
-          if (el && el.length > 0) {
-            el.connectedEdges().remove();
-            el.remove();
-          }
+          const el = cy.$(`node[id="${String(entityId).replace(/"/g, '\\"')}"]`);
+          if (el.length) { el.connectedEdges().remove(); el.remove(); }
         }
         activeSelectedNodeId = null;
         if (window.CipherSelection) window.CipherSelection.entityId = null;
         if (inspectorEmpty) inspectorEmpty.style.display = "block";
         if (inspectorContent) inspectorContent.style.display = "none";
-        
         await loadNetworkGraph(window.CipherCaseState?.id || 1);
-        if (typeof showNetworkToast === "function") {
-          showNetworkToast(`Entity "${entityLabel}" permanently deleted.`);
-        } else if (typeof toast === "function") {
-          toast(`Entity "${entityLabel}" permanently deleted.`);
-        }
-      } else {
+        showNetworkToast?.(`CSV node "${entityLabel}" removed from the active preview.`);
+        return;
+      }
+
+      // Master/verified graph nodes can carry an external CSV ID such as P001.
+      // Resolve that external ID to the numeric entities.id expected by DELETE.
+      const backendId = await resolveBackendEntityId(entityId, nodeData);
+      if (!backendId) {
+        throw new Error("Selected node is not linked to a valid backend entity. Re-import the CSV or select a verified entity.");
+      }
+
+      const caseId = window.CipherCaseState?.id || 1;
+      const res = await fetch(`/api/cases/${caseId}/entities/${encodeURIComponent(backendId)}`, {
+        method: "DELETE",
+        headers: (typeof window.getAuthHeaders === "function" ? window.getAuthHeaders() : {})
+      });
+
+      if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        const errMsg = errJson.error || errJson.detail || "Failed to delete entity.";
-        if (typeof showNetworkToast === "function") {
-          showNetworkToast(errMsg);
-        } else {
-          alert(errMsg);
-        }
+        throw new Error(errJson.error || errJson.detail || "Failed to delete entity.");
+      }
+
+      // Remove the node from both Cytoscape and any active CSV preview before
+      // reloading. Otherwise loadNetworkGraph would immediately resurrect it.
+      removeFromLocalCsvGraph(entityId, nodeData);
+      if (cy) {
+        const el = cy.$(`node[id="${String(entityId).replace(/"/g, '\\"')}"]`);
+        if (el.length) { el.connectedEdges().remove(); el.remove(); }
+      }
+      activeSelectedNodeId = null;
+      if (window.CipherSelection) window.CipherSelection.entityId = null;
+      if (inspectorEmpty) inspectorEmpty.style.display = "block";
+      if (inspectorContent) inspectorContent.style.display = "none";
+
+      // Verified/master graphs must refresh from the backend. If the active
+      // preview was tied to the deleted entity, clear it so stale CSV data cannot
+      // overwrite the freshly deleted state.
+      if (window.CipherLocalGraphData?.pending && backendId) {
+        window.CipherLocalGraphData.nodes = (window.CipherLocalGraphData.nodes || []).filter(n => String(n.id) !== String(entityId));
+      }
+      await loadNetworkGraph(caseId);
+      if (typeof showNetworkToast === "function") {
+        showNetworkToast(`Entity "${entityLabel}" permanently deleted.`);
+      } else if (typeof toast === "function") {
+        toast(`Entity "${entityLabel}" permanently deleted.`);
       }
     } catch (err) {
       console.error("Error deleting entity:", err);
       if (typeof showNetworkToast === "function") {
-        showNetworkToast("Error contacting server to delete entity.");
+        showNetworkToast(err.message || "Error deleting entity.");
+      } else {
+        alert(err.message || "Error deleting entity.");
       }
     }
   };
@@ -11501,4 +12189,48 @@ document
   } else {
     bindReviewEvents();
   }
+})();
+
+/* ===== FRONTEND-ONLY IMMERSIVE FULLSCREEN CONTROLS ===== */
+(function initCipherFullscreenControls(){
+  if (window.__cipherFullscreenControlsInitialized) return;
+  window.__cipherFullscreenControlsInitialized = true;
+
+  const enterFullscreen = async (target, button) => {
+    if (!target) return;
+    try {
+      if (document.fullscreenElement === target) {
+        await document.exitFullscreen();
+        return;
+      }
+      if (document.fullscreenElement) await document.exitFullscreen();
+      if (target.requestFullscreen) await target.requestFullscreen({navigationUI:'hide'});
+      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+    } catch (err) {
+      console.warn('Fullscreen unavailable:', err);
+      if (button) button.blur();
+    }
+  };
+
+  const networkButton = document.getElementById('networkFullscreenBtn');
+  const gisButton = document.getElementById('gisFullscreenBtn');
+  const networkTarget = document.querySelector('.network-workbench');
+  const gisTarget = document.querySelector('.gis-workbench');
+
+  networkButton?.addEventListener('click', () => enterFullscreen(networkTarget, networkButton));
+  gisButton?.addEventListener('click', () => enterFullscreen(gisTarget, gisButton));
+
+  document.addEventListener('fullscreenchange', () => {
+    const active = document.fullscreenElement;
+    if (networkButton) {
+      const on = active === networkTarget;
+      networkButton.querySelector('b')?.replaceChildren(document.createTextNode(on ? 'EXIT FULLSCREEN' : 'FULLSCREEN'));
+    }
+    if (gisButton) {
+      const on = active === gisTarget;
+      gisButton.querySelector('b')?.replaceChildren(document.createTextNode(on ? 'EXIT FULLSCREEN' : 'FULLSCREEN MAP'));
+    }
+    window.dispatchEvent(new Event('resize'));
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 180);
+  });
 })();

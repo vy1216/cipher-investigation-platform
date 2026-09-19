@@ -80,8 +80,15 @@
   window.getAuthHeaders = authHeaders;
 
   window.addEventListener("cipher:auth-expired", () => {
+    // A stale token may be discovered during the initial landing-page boot.
+    // Do not hijack the public landing page with the login modal in that case.
+    // Only redirect an investigator to authentication when the protected
+    // workspace is actually open.
     try {
-      if (typeof window.cipherOpenAuth === "function") window.cipherOpenAuth("login");
+      const workspace = document.getElementById("cipherWorkspace");
+      if (workspace?.classList.contains("open") && typeof window.cipherOpenAuth === "function") {
+        window.cipherOpenAuth("login");
+      }
     } catch {}
   });
 
@@ -97,8 +104,6 @@
     el.textContent = msg; el.style.display = "block";
     clearTimeout(el._timer); el._timer = setTimeout(() => el.style.display = "none", 3500);
   }
-
-  window.cipherSetCaseState = null;
 
   function setCaseState(c) {
     if (!c) return;
@@ -118,8 +123,6 @@
     syncReportFromCase(c);
     return c;
   }
-
-window.cipherSetCaseState = setCaseState;
 
   async function apiJson(url, options={}) {
     const res = await fetch(url, options);
@@ -189,8 +192,6 @@ window.cipherSetCaseState = setCaseState;
       return [];
     }
   }
-
-window.cipherLoadCases = loadCases;
 
   function renderCases(cases) {
     const cards = [...document.querySelectorAll("#cipherWorkspace .floating-case")];
@@ -323,7 +324,16 @@ window.cipherLoadCases = loadCases;
   }
 
   async function refreshNetwork() {
-    try { if(typeof window.loadNetworkGraph === "function") await window.loadNetworkGraph(state.id); } catch(e) { console.warn("network refresh",e); }
+    try {
+      // Keep a freshly uploaded CSV preview authoritative while it is pending.
+      // This prevents background refreshes from replacing it with older verified
+      // or seeded graph data for the same case.
+      if (window.CipherLocalGraphData?.pending && Array.isArray(window.CipherLocalGraphData.nodes) && window.CipherLocalGraphData.nodes.length) {
+        if(typeof window.loadNetworkGraph === "function") await window.loadNetworkGraph(state.id);
+        return;
+      }
+      if(typeof window.loadNetworkGraph === "function") await window.loadNetworkGraph(state.id);
+    } catch(e) { console.warn("network refresh",e); }
   }
 
   async function renderDynamicTimeline(){
@@ -336,11 +346,27 @@ window.cipherLoadCases = loadCases;
 
     try {
       const data=await apiJson(`/api/cases/${state.id}/timeline?status=verified`, {headers:authHeaders(false)});
-      const events=Array.isArray(data.events) ? data.events : [];
+      const verifiedEvents=Array.isArray(data.events) ? data.events : [];
+      const localEvents=(String(window.CipherLocalTimelineCaseId || state.id)===String(state.id) && Array.isArray(window.CipherLocalTimelineData)) ? window.CipherLocalTimelineData : [];
+      // Prefer the freshly uploaded CSV timeline preview while it is pending.
+      // The backend may contain older verified/sample events for the same case;
+      // those must never replace the timeline generated from the CSV the user
+      // just uploaded.
+      const usingLocal=localEvents.length>0;
+      const events=usingLocal ? localEvents : verifiedEvents;
+      if(!usingLocal && verifiedEvents.length>0) window.CipherLocalTimelineData=null;
       const cards=[...stage.querySelectorAll(".timeline-event-card")];
+      const countEl=document.getElementById("timelineEventCount");
+      const spanEl=document.querySelector(".timeline-rail-stat:nth-of-type(2) b");
 
-      // Remove demo/hardcoded content and repopulate the existing visual cards from the API.
-      cards.forEach(card=>{ card.style.display="none"; card.innerHTML=""; card.onclick=null; });
+      // Reuse the existing physical cards so the current flip/replay controls stay functional.
+      cards.forEach(card=>{ card.style.display="none"; card.innerHTML=""; card.onclick=null; card.classList.remove("csv-timeline-card","flipped","flipping","selected"); });
+
+      if(countEl) countEl.textContent=String(events.length).padStart(2,"0");
+      if(spanEl && events.length){
+        const dates=events.map(e=>e.event_time).filter(Boolean).sort();
+        if(dates.length) spanEl.textContent=`${dates[0].slice(0,4)} — ${dates[dates.length-1].slice(0,4)}`;
+      }
 
       if(!events.length){
         if(seqLabel) seqLabel.textContent="00 / 00";
@@ -365,20 +391,29 @@ window.cipherLoadCases = loadCases;
           stage.insertBefore(card, stage.querySelector(".timeline-stage-footer"));
         }
         const date=ev.event_time ? new Date(ev.event_time).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"}).toUpperCase() : "DATE UNKNOWN";
-        const title=ev.description || ev.event_type || "Investigation event";
-        const source=ev.source_reference || "Verified timeline event";
+        const title=ev.title || ev.description || ev.event_type || "Investigation event";
+        const source=ev.description || ev.source_reference || (usingLocal ? "CSV evidence event pending verification." : "Verified timeline event");
+        const tags=Array.isArray(ev.tags) ? ev.tags : [ev.event_type || "EVENT", usingLocal ? "PENDING REVIEW" : (ev.verification_status || "VERIFIED")];
         card.style.display="";
         card.dataset.event=String(i+1);
-        card.innerHTML=`<div class="timeline-flip-inner"><div class="timeline-card-face timeline-card-front"><span class="timeline-card-line"></span><span class="timeline-card-index">${String(i+1).padStart(2,"0")} / ${esc(ev.event_type || "EVENT")}</span><span class="timeline-card-date">${esc(date)}</span><h3>${esc(title)}</h3><p>${esc(source)}</p><div class="timeline-card-tags"><span>${esc(ev.verification_status || "VERIFIED")}</span>${ev.entity_id?`<span>ENTITY ${esc(ev.entity_id)}</span>`:""}${ev.location_id?`<span>LOCATION ${esc(ev.location_id)}</span>`:""}</div><span class="timeline-flip-hint">FLIP / NEXT</span></div><div class="timeline-card-face timeline-card-back"><span class="timeline-card-index">EVENT ${String(i+1).padStart(2,"0")} / DETAIL</span><span class="timeline-card-date">${esc(date)}</span><h3>${esc(title)}</h3><p>${esc(source)}</p><div class="timeline-card-tags"><span>CASE / ${esc(state.caseNumber || state.id)}</span></div><span class="timeline-flip-back-note">CLICK TO INSPECT</span></div></div>`;
+        card.innerHTML=`<div class="timeline-flip-inner"><div class="timeline-card-face timeline-card-front"><span class="timeline-card-line"></span><span class="timeline-card-index">${String(i+1).padStart(2,"0")} / ${esc(ev.event_type || "EVENT")}</span><span class="timeline-card-date">${esc(date)}</span><h3>${esc(title)}</h3><p>${esc(source)}</p><div class="timeline-card-tags">${tags.map(t=>`<span>${esc(t)}</span>`).join("")}</div><span class="timeline-flip-hint">FLIP / NEXT</span></div><div class="timeline-card-face timeline-card-back"><span class="timeline-card-index">EVENT ${String(i+1).padStart(2,"0")} / DETAIL</span><span class="timeline-card-date">${esc(date)}</span><h3>${esc(title)}</h3><p>${esc(source)}</p><div class="timeline-card-tags"><span>CASE / ${esc(state.caseNumber || state.id)}</span>${usingLocal?`<span>PENDING REVIEW</span>`:"<span>VERIFIED</span>"}</div><span class="timeline-flip-back-note">CLICK TO INSPECT</span></div></div>`;
         card.onclick=()=>{
           const t=document.getElementById("timelineInspectorTitle"); if(t) t.textContent=title;
           const b=document.getElementById("timelineInspectorBody"); if(b) b.innerHTML=`<div class="timeline-inspector-section"><b>DATE</b><p>${esc(date)}</p></div><div class="timeline-inspector-section"><b>TYPE</b><p>${esc(ev.event_type||"EVENT")}</p></div><div class="timeline-inspector-section"><b>SOURCE</b><p>${esc(source)}</p></div><div class="timeline-inspector-section"><b>ENTITY</b><p>${esc(ev.entity_id ?? "—")}</p></div><div class="timeline-inspector-section"><b>LOCATION</b><p>${esc(ev.location_id ?? "—")}</p></div><div class="timeline-inspector-section"><b>EVIDENCE</b><p>${esc(ev.evidence_id ?? "—")}</p></div><div class="timeline-inspector-section"><b>STATUS</b><p>${esc(ev.verification_status || "VERIFIED")}</p></div>`;
         };
       });
 
+      if(typeof window.CipherTimelineRefreshLayout === "function") window.CipherTimelineRefreshLayout();
+      if(typeof window.CipherTimelineDrawPaths === "function") window.CipherTimelineDrawPaths();
       if(seqLabel) seqLabel.textContent=`00 / ${String(events.length).padStart(2,"0")}`;
       if(core) core.textContent=state.caseNumber || "ACTIVE CASE";
-      if(footer) footer.textContent=`${events.length} VERIFIED EVENTS`;
+      if(footer) footer.textContent=usingLocal ? `${events.length} CSV EVENTS · PENDING REVIEW` : `${events.length} VERIFIED EVENTS`;
+      const timelineStatus=document.getElementById("workspaceTimelineStatus");
+      if(timelineStatus) timelineStatus.textContent=usingLocal ? "CSV TRACE / PENDING" : "TRACE RUNNING";
+      if(usingLocal){
+        const stateEl=document.getElementById("timelineSequenceState");
+        if(stateEl) stateEl.textContent="PENDING REVIEW";
+      }
     } catch(e) {
       console.warn("timeline",e);
       if(footer) footer.textContent="TIMELINE DATA UNAVAILABLE";
@@ -493,6 +528,16 @@ window.cipherLoadCases = loadCases;
   }
 
   async function boot(){
+    // CIPHER always opens on the public landing page. Authentication and the
+    // protected workspace are entered explicitly through the landing actions
+    // (or their hash routes), never as an automatic startup redirect.
+    if (!location.hash || !/^#(?:auth-(?:login|signup)|workspace)$/.test(location.hash)) {
+      document.getElementById("cipherAuth")?.classList.remove("open");
+      document.getElementById("cipherWorkspace")?.classList.remove("open");
+      document.getElementById("cipherAuth")?.setAttribute("aria-hidden", "true");
+      document.getElementById("cipherWorkspace")?.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
     setupEvidenceInput();
     const templateLink = document.getElementById("cipherCsvDownloadTemplateLink");
     if (templateLink) templateLink.href = `/api/cases/${state.id || 1}/sample-csv`;

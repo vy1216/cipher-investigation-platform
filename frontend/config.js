@@ -3,4 +3,4 @@
    Example:
      window.CIPHER_API_BASE = "https://cipher-api.onrender.com";
    Leave empty only when the frontend and API are same-origin/local. */
-window.CIPHER_API_BASE = "https://cipher-investigation-platform.onrender.com";
+window.CIPHER_API_BASE = "";
